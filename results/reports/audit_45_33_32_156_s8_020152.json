@@ -1,0 +1,27 @@
+{
+    "timestamp": "2026-04-25T02:01:52.883705",
+    "target": "45.33.32.156",
+    "stealth_level": 8,
+    "optimization_metrics": {
+        "wait_time_ms": 4986.122159250302,
+        "packet_size": 981,
+        "threads": 1,
+        "noise_score_f1": 0.3474650069103383,
+        "estimated_time_f2": 287.7987653755433
+    },
+    "findings": {
+        "open_ports_count": 2,
+        "ports": [
+            {
+                "port": 22,
+                "service": "ssh",
+                "banner": "SSH-2.0-OpenSSH_6.6.1p1 Ubuntu-2ubuntu2.13"
+            },
+            {
+                "port": 80,
+                "service": "http",
+                "banner": "HTTP/1.1 200 OK"
+            }
+        ]
+    }
+}

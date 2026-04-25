@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "optiveil"
+version = "0.1.0"
+description = "Diseño de un modelo de optimización multiobjetivo para redes y análisis de vulnerabilidades"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "typer[all]",       # Para la interfaz de comandos (CLI)
+    "rich",             # Para que la terminal se vea profesional
+    "scapy",            # Para manipulación y envío de paquetes de red
+    "pymoo",            # El corazón: Algoritmos genéticos (NSGA-II)
+    "python-dotenv",    # Para manejar las API Keys en el .env
+    "langchain",        # Para la orquestación de la IA
+    "langchain-openai", # (O el proveedor que prefieras)
+]
+
+[project.scripts]
+optiveil = "src.IA_guard.cli:app"
