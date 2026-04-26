@@ -6,12 +6,6 @@ from pymoo.operators.crossover.sbx import SBX
 from pymoo.operators.mutation.pm import PM
 from pymoo.operators.sampling.rnd import FloatRandomSampling
 
-
-#Objetivos a minimizar 
-#Objetivo 1: Minimizar riesgo de detección (f1)
-#Objetivo 2: Minimizar tiempo de ejecución (f2)
-
-
 class OptiVeilSthealthProblem(ElementwiseProblem):
     def __init__(self, target_ports):
         self.target_ports = target_ports
@@ -23,34 +17,24 @@ class OptiVeilSthealthProblem(ElementwiseProblem):
         
 
     def _evaluate(self, x, out, *args, **kwargs):
-        #Se definen tiempo de espera, tamaño de paquete y número de hilos a partir de las variables de decisión
-        #Como variables de decision
-        
         wait_time = x[0] 
         packet_size = x[1] 
         threads = x[2] 
         
-        #Para minimizar el riesgo de detección
         ruido = (1000 / wait_time) * threads
         
-        #Para penalizar el paquete (si es muy pequeño)
         if packet_size < 128:
-            ruido*=1.5
+            ruido *= 1.5
         
-        #Para minimizar el tiempo de ejecución
         tiempo_ejecucion = (self.target_ports / threads) * (wait_time / 1000.0)
         
-        #Retornamos esos dos objetivos
         out["F"] = [ruido, tiempo_ejecucion]
-        
-    
 
-#Ahora para ejecutar los parametros con el nsga-ii
 def run_nsga_ii(target_ports: int = 1000):
     problem = OptiVeilSthealthProblem(target_ports)
     
     algorithm = NSGA2(
-        pop_size=50,
+        pop_size=100,
         n_offsprings=20,
         sampling=FloatRandomSampling(),
         crossover=SBX(prob=0.9, eta=15),
@@ -64,11 +48,8 @@ def run_nsga_ii(target_ports: int = 1000):
                    verbose=False)
     
     return res.X, res.F
-        
 
-#Ahora debemos seleccionar la mejor configuracion para el sistema
 def select_best_configuration(X, F, stealth_level: int):
-    
     stealth_level = max(1, min(10, stealth_level))
     sorted_indices = np.argsort(F[:, 0])  
     num_solutions = len(sorted_indices)
@@ -80,8 +61,7 @@ def select_best_configuration(X, F, stealth_level: int):
     best_x = X[best_index]
     best_f = F[best_index]
     
-    
-    return {
+    config_seleccionada = {
         "wait_time_ms": float(best_x[0]),
         "packet_size": int(best_x[1]),
         "threads": int(best_x[2]),
@@ -89,4 +69,14 @@ def select_best_configuration(X, F, stealth_level: int):
             "noise_score": float(best_f[0]),
             "estimated_time_sec": float(best_f[1])
         }
+    }
+    
+    pareto_data = [
+        {"noise": float(f[0]), "time": float(f[1])} 
+        for f in F
+    ]
+    
+    return {
+        "config": config_seleccionada,
+        "pareto_front": pareto_data 
     }

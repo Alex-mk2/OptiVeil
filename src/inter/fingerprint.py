@@ -1,10 +1,11 @@
 import socket
 import re
 
-
 class ServiceIdentifier:
     def __init__(self, timeout=2):
         self.timeout = timeout
+        
+        
         self.signatures = {
             "ssh": r"(SSH-\d+\.\d+-[^\r\n]+)",
             "http": r"(HTTP/\d+\.\d+\s+\d+\s+[^\r\n]+)",
@@ -15,9 +16,18 @@ class ServiceIdentifier:
             "vnc": r"(RFB\s+\d+\.\d+)",
             "redis": r"(-ERR\s+.*password.*|PONG)"
         }
-    
+        
+        
+        self.common_ports = {
+            21: "ftp", 22: "ssh", 23: "telnet", 25: "smtp",
+            53: "dns", 80: "http", 110: "pop3", 143: "imap",
+            443: "https", 445: "smb", 3306: "mysql", 3389: "rdp",
+            5432: "postgresql", 6379: "redis", 8080: "http-proxy"
+        }
     
     def identify(self, ip: str, port: int) -> dict:
+        result = {"port": port, "service": "unknown", "banner": None}
+        
         try:
             with socket.create_connection((ip, port), timeout=self.timeout) as sock:
                 if port in [80, 443, 8080, 8443]:
@@ -28,10 +38,19 @@ class ServiceIdentifier:
                     sock.sendall(b"\x00\x00\x00\x2f\xff\x53\x4d\x42\x72\x00\x00\x00\x00\x18\x53\xc8\x00\x00")
 
                 banner_bytes = sock.recv(2048)
-                return self._analyze_banner(banner_bytes, port)
+                if banner_bytes:
+                    result = self._analyze_banner(banner_bytes, port)
 
         except (socket.timeout, ConnectionRefusedError, OSError):
-            return {"port": port, "service": "unknown", "banner": None}
+            pass
+
+        
+        if result["service"] == "unknown" and port in self.common_ports:
+            result["service"] = self.common_ports[port]
+            if not result["banner"]:
+                result["banner"] = "N/A (Inferred by standard port)"
+                
+        return result
 
     def _analyze_banner(self, banner_bytes: bytes, port: int) -> dict:
         banner_text = banner_bytes.decode(errors="ignore").strip()
@@ -50,3 +69,22 @@ class ServiceIdentifier:
                     result["banner"] = f"Binary match for {service.upper()}"
                     break
         return result
+    
+    def _calculate_risk(self, service: str, banner: str) -> str:
+        """Asigna un nivel de riesgo basado en el servicio identificado y su banner."""
+        banner_lower = banner.lower() if banner else ""
+        if service in ["smb", "rdp", "telnet"]:
+            return "CRITICAL (Servicio de administración riesgoso expuesto)"
+        
+        if "openssh_6" in banner_lower or "openssh_5" in banner_lower:
+            return "HIGH (Versión obsoleta / Vulnerable a CVEs)"
+            
+        if service == "ftp":
+            if "vsftpd 2.3.4" in banner_lower:
+                return "CRITICAL (Vulnerable a Backdoor CVE-2011-2523)"
+            return "MEDIUM (Transmisión en texto plano)"
+            
+        if service in ["http", "ssh", "https"]:
+            return "LOW (Superficie estándar)"
+            
+        return "INFO (Requiere revisión manual)"
