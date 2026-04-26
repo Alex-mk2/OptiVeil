@@ -1,0 +1,39 @@
+{
+    "steps": [
+        {
+            "id": 1,
+            "phase": "Reconocimiento",
+            "action": "Enumerar usuarios FTP an\u00f3nimos o credenciales predeterminadas en el puerto 21",
+            "risk": "alto",
+            "justification": "FTP puede permitir acceso an\u00f3nimo o usar credenciales predeterminadas, facilitando la entrada inicial."
+        },
+        {
+            "id": 2,
+            "phase": "Reconocimiento",
+            "action": "Analizar el servicio SMTP en el puerto 25 para enumerar usuarios v\u00e1lidos",
+            "risk": "medio",
+            "justification": "SMTP puede revelar usuarios v\u00e1lidos mediante comandos VRFY o EXPN, \u00fatil para ataques posteriores."
+        },
+        {
+            "id": 3,
+            "phase": "Reconocimiento",
+            "action": "Realizar fuzzing de directorios y archivos en el servicio HTTP (puerto 80)",
+            "risk": "bajo",
+            "justification": "HTTP puede exponer rutas sensibles o archivos ocultos, proporcionando informaci\u00f3n valiosa."
+        },
+        {
+            "id": 4,
+            "phase": "Acceso inicial",
+            "action": "Explotar credenciales FTP obtenidas para subir un webshell",
+            "risk": "alto",
+            "justification": "Si se obtiene acceso FTP, se puede subir un webshell para ejecuci\u00f3n remota de comandos."
+        },
+        {
+            "id": 5,
+            "phase": "Escalada de privilegios",
+            "action": "Usar el webshell para explotar vulnerabilidades conocidas en el sistema operativo Linux/Unix",
+            "risk": "alto",
+            "justification": "Linux/Unix puede tener vulnerabilidades sin parches que permitan escalar privilegios."
+        }
+    ]
+}

@@ -52,7 +52,8 @@ async def start_scan(request: ScanRequest):
             "best_config": result["best_config"],
             "findings": result["findings"],
             "pareto_front": result["pareto_front"],
-            "status": result["status"]
+            "status": result["status"],
+            "attack_roadmap": result.get("attack_roadmap"),
         }
     except Exception as e:
         print(f"CRITICAL ERROR EN API: {str(e)}")
@@ -150,3 +151,20 @@ async def export_report_pdf(filename: str):
             "Content-Disposition": f"attachment; filename=Reporte_OptiVeil_{filename.replace('.md', '.pdf')}"
         }
     )
+
+
+@app.get("/api/strategy/{target}")
+def get_strategy_content(target: str):
+    """Busca y devuelve el JSON de la estrategia ofensiva para el objetivo."""
+    target_clean = target.replace(".", "_")
+    
+    posibles_rutas = [
+        os.path.join("results/attack_reports", f"strategy_{target_clean}.json")
+    ]
+    
+    for file_path in posibles_rutas:
+        if os.path.exists(file_path):
+            with open(file_path, "r", encoding="utf-8") as f:
+                return json.load(f)
+                
+    raise HTTPException(status_code=404, detail=f"Estrategia no encontrada para {target}")

@@ -1,3 +1,4 @@
+import json
 import os
 import sys
 
@@ -7,8 +8,9 @@ from modules.stealth.scanner import StealthScanner
 from utils.generate_report import save_audit_report
 from inter.fingerprint import ServiceIdentifier
 from inter.response import RuleGenerator
-from inter.ai_analyzer import analizar_auditoria
+from inter.IA_analyzer import analizar_auditoria
 from utils.pareto_plot import plot_pareto_front
+from inter.IA_offensive import generar_ruta_ataque
 
 class OptiVeilEngine:
     def __init__(self, target: str, stealth: int, ports_count: int):
@@ -74,12 +76,24 @@ class OptiVeilEngine:
         os.makedirs("results/reports_IA", exist_ok=True)
         with open(ruta_md, "w", encoding="utf-8") as f:
             f.write(reporte_ia)
-
+        
+        notify("Generando ruta de ataque ofensiva con IA...")
+        ruta_ataque = generar_ruta_ataque(hallazgos_detallados, best_config["metrics"]["noise_score"])
+        
+        nombre_base = self.target.replace('.', '_')
+        ruta_json_estrategia = os.path.join(f"results/attack_reports", f"strategy_{nombre_base}.json")
+        os.makedirs("results/attack_reports", exist_ok=True)
+        
+        if ruta_ataque:
+            with open(ruta_json_estrategia, "w", encoding="utf-8") as f:
+                json.dump(ruta_ataque, f, indent=4)
+        
         return {
             "status": "success",
             "target": self.target,
             "best_config": best_config,
             "findings": hallazgos_detallados,
+            "attack_roadmap": ruta_ataque,
             "pareto_front": pareto_front,
             "files": {
                 "json": ruta_reporte,

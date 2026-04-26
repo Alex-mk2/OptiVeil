@@ -74,5 +74,15 @@ export const reportService = {
     getYaraRule: async (target) => {
         const response = await api.get(`/api/rules/${target}`);
         return response.data;
+    },
+
+    getStrategy: async (target) => {
+        try {
+            const response = await api.get(`/api/strategy/${target}`);
+            return response.data;
+        } catch (error) {
+            console.warn(`No se encontró estrategia para ${target}`, error);
+            throw error; 
+        }
     }
 };

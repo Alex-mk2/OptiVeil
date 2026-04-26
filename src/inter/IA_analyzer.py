@@ -53,3 +53,5 @@ def analizar_auditoria(ruta_json: str):
         return respuesta.content
     except Exception as e:
         return f"Error en la inferencia de IA: {e}"
+    
+    

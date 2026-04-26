@@ -2,7 +2,7 @@ rule Detect_ftp_21 {
     meta:
         description = "Deteccion automatica de servicio identificado por OptiVeil"
         author = "OptiVeil AI - Variacion B"
-        date = "2026-04-25"
+        date = "2026-04-26"
         target_port = 21
         banner_info = "220 You will be disconnected after 10 minutes of inactivity."
 
@@ -17,7 +17,7 @@ rule Detect_smtp_25 {
     meta:
         description = "Deteccion automatica de servicio identificado por OptiVeil"
         author = "OptiVeil AI - Variacion B"
-        date = "2026-04-25"
+        date = "2026-04-26"
         target_port = 25
         banner_info = "N/A (Inferred by standard port)"
 
@@ -32,7 +32,7 @@ rule Detect_http_80 {
     meta:
         description = "Deteccion automatica de servicio identificado por OptiVeil"
         author = "OptiVeil AI - Variacion B"
-        date = "2026-04-25"
+        date = "2026-04-26"
         target_port = 80
         banner_info = "HTTP/1.1 200 OK"
 
