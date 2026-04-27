@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  postgres_db:
+    image: postgres:16-alpine
+    container_name: optiveil_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "5432:5432"
+    volumes:
+      - optiveil_pgdata:/var/lib/postgresql/data
+
+volumes:
+  optiveil_pgdata:

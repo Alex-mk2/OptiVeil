@@ -3,37 +3,65 @@
         {
             "id": 1,
             "phase": "Reconocimiento",
-            "action": "Enumerar usuarios FTP an\u00f3nimos o credenciales predeterminadas en el puerto 21",
+            "action": "Escaneo agresivo dirigido (nmap -T4/5 con scripts de banner y versi\u00f3n) sobre puertos 21,25,80 para confirmar servicios, enumerar hosts y recolectar versiones; recolecci\u00f3n de banners HTTP/FTP y fingerprinting r\u00e1pido del stack web.",
             "risk": "alto",
-            "justification": "FTP puede permitir acceso an\u00f3nimo o usar credenciales predeterminadas, facilitando la entrada inicial."
+            "justification": "Noise Score 35.11 indica enfoque ruidoso; los banners detectados (FTP: mensaje de desconexi\u00f3n, HTTP 200, SMTP inferido) y el OS Linux/Unix justifican un escaneo veloz para maximizar superficie explotable antes de cambios en el entorno."
         },
         {
             "id": 2,
-            "phase": "Reconocimiento",
-            "action": "Analizar el servicio SMTP en el puerto 25 para enumerar usuarios v\u00e1lidos",
-            "risk": "medio",
-            "justification": "SMTP puede revelar usuarios v\u00e1lidos mediante comandos VRFY o EXPN, \u00fatil para ataques posteriores."
+            "phase": "Enumeraci\u00f3n FTP",
+            "action": "Intentar acceso an\u00f3nimo y enumeraci\u00f3n de directorios; si falla, forzar credenciales con ataques masivos (hydra/medusa) contra FTP aprovechando listas de credenciales y combinaciones derivadas de usuario SMTP/HTTP; probar carga de archivos y permisos de escritura en directorios accesibles.",
+            "risk": "alto",
+            "justification": "Puerto 21 abierto con banner que sugiere servidor activo y desconexi\u00f3n por inactividad \u2014 condici\u00f3n aprovechable con ataques r\u00e1pidos; Linux/Unix suele alojar binarios o webs en home/public_html que permiten escalada si se puede escribir."
         },
         {
             "id": 3,
-            "phase": "Reconocimiento",
-            "action": "Realizar fuzzing de directorios y archivos en el servicio HTTP (puerto 80)",
-            "risk": "bajo",
-            "justification": "HTTP puede exponer rutas sensibles o archivos ocultos, proporcionando informaci\u00f3n valiosa."
+            "phase": "Enumeraci\u00f3n SMTP y abuso",
+            "action": "Ejecutar pruebas de enumeraci\u00f3n de usuarios (VRFY/EXPN/RCPT), comprobaci\u00f3n de relay abierto y exploraci\u00f3n para credential harvesting; realizar password spray limitado y env\u00edo masivo de correos de prueba para validar relay y exfiltraci\u00f3n por canal SMTP si es vulnerable.",
+            "risk": "alto",
+            "justification": "Puerto 25 abierto (servicio inferido) permite enumeraci\u00f3n y posibles vectores de exfiltraci\u00f3n/relay; dado el enfoque ruidoso, el objetivo es identificar credenciales o canales de salida r\u00e1pidamente."
         },
         {
             "id": 4,
-            "phase": "Acceso inicial",
-            "action": "Explotar credenciales FTP obtenidas para subir un webshell",
+            "phase": "Enumeraci\u00f3n web agresiva",
+            "action": "Fuzzing y brute-force de directorios/archivos (gobuster/ffuf) contra HTTP, identificaci\u00f3n de endpoints de subida, paneles de administraci\u00f3n y par\u00e1metros vulnerables; ejecuci\u00f3n de esc\u00e1neres autom\u00e1ticos de vulnerabilidades web (sqlmap, nikto) con pruebas r\u00e1pidas para RCE/LFI/RFI/file upload.",
             "risk": "alto",
-            "justification": "Si se obtiene acceso FTP, se puede subir un webshell para ejecuci\u00f3n remota de comandos."
+            "justification": "Puerto 80 responde 200 OK; escaneo agresivo es coherente con nivel de ruido elevado para descubrir r\u00e1pidamente puntos de entrada explotables en el stack Linux/Unix."
         },
         {
             "id": 5,
-            "phase": "Escalada de privilegios",
-            "action": "Usar el webshell para explotar vulnerabilidades conocidas en el sistema operativo Linux/Unix",
+            "phase": "Explotaci\u00f3n inicial",
+            "action": "Usar credenciales descubiertas o vectores de upload/execution identificados para introducir un payload (webshell/FTP dropper); si existe acceso FTP con escritura, subir un binario o webshell; si web permite upload o RCE, desplegar acceso remoto inmediato.",
             "risk": "alto",
-            "justification": "Linux/Unix puede tener vulnerabilidades sin parches que permitan escalar privilegios."
+            "justification": "Priorizar ganancia r\u00e1pida de c\u00f3digo en m\u00e1quina objetivo aprovechando ftp/http; Linux/Unix y accesos detectados hacen probable la ejecuci\u00f3n remota si se logra escribir en el sistema."
+        },
+        {
+            "id": 6,
+            "phase": "Post-explotaci\u00f3n y escalada",
+            "action": "Enumerar localmente usuarios, permisos SUID/SGID, configuraciones de cron, ficheros con credenciales y servicios internos; intentar escalada con exploits locales conocidos (kernel/userspace) y pivotar a servicios internos por SMTP o HTTP si existen rutas.",
+            "risk": "alto",
+            "justification": "Una vez logrado acceso, la escalada r\u00e1pida maximiza beneficio antes de detecci\u00f3n; Linux/Unix dispone de vectores comunes (SUID, crontab, credenciales en archivos) detectables con enumeraci\u00f3n automatizada."
+        },
+        {
+            "id": 7,
+            "phase": "Movimiento lateral y persistencia",
+            "action": "Reutilizar credenciales encontradas para autenticarse en otros servicios (SMTP/FTP/HTTP) y desplegar mecanismos de persistencia r\u00e1pidos (cron job, servicio systemd, webshell persistente); crear canales de control temporales cifrados para operaciones posteriores.",
+            "risk": "alto",
+            "justification": "Con servicios SMTP/FTP/HTTP detectados, la reutilizaci\u00f3n y pivot r\u00e1pido es coherente con estrategia ruidosa para maximizar alcance antes de respuesta defensiva."
+        },
+        {
+            "id": 8,
+            "phase": "Exfiltraci\u00f3n",
+            "action": "Compactar datos sensibles identificados y exfiltrarlos por el canal m\u00e1s disponible y ruidoso detectado (SMTP relay si abierto, HTTP POST a servidor controlado o FTP upload); automatizar transferencia y verificar integridad fuera de la red objetivo.",
+            "risk": "alto",
+            "justification": "Dado el enfoque agresivo, usar canales detectados (25/80/21) para exfiltrar r\u00e1pido; SMTP/HTTP/FTP brindan rutas pr\u00e1cticas en sistemas Linux/Unix identificados."
+        },
+        {
+            "id": 9,
+            "phase": "Limpieza m\u00ednima / mantenimiento de acceso",
+            "action": "Si el objetivo requiere permanencia, dejar backdoor discreto (usuario con clave fuerte, key-based SSH si posible) y/o conservar webshell con nombre y permisos cambiados; registrar cambios cr\u00edticos para posible revert por el equipo red team cuando corresponda.",
+            "risk": "alto",
+            "justification": "Persistencia r\u00e1pida permite retorno pero incrementa huella; con Noise Score alto se prioriza acceso continuado pese al aumento de ruido, documentando cambios para control del equipo."
         }
     ]
 }

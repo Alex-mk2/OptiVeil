@@ -86,3 +86,16 @@ export const reportService = {
         }
     }
 };
+
+
+export const TopologyService = {
+    getTopology: async (target) => {
+        try {
+            const response = await api.get(`/api/topology/${target}`);
+            return response.data;
+        } catch (error) {
+            console.error(`Error al obtener la topología para ${target}:`, error);
+            throw error;
+        }
+    }
+};

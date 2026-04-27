@@ -1,8 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
-import { FileText, Code, Database, Clock, Loader2, Activity, Download, ShieldAlert } from 'lucide-react';
+import { FileText, Code, Database, Clock, Loader2, Activity, Download, ShieldAlert, Network } from 'lucide-react';
 import { reportService, auditService } from '../services/api';
 import AttackRoadmap from '../components/AttackRoadmap';
+import YaraViewer from '../components/YaraViewer';
+import NetworkMap from '../components/NetworkMap';
 
 function ReportsDashboard() {
   const [activeTab, setActiveTab] = useState('ia');
@@ -140,6 +142,14 @@ function ReportsDashboard() {
           >
             <ShieldAlert className="w-4 h-4" /> ESTRATEGIA OFENSIVA
           </button>
+
+          {/* Topologia de red */}
+          <button 
+            onClick={() => setActiveTab('topology')}
+            className={`px-4 py-2 rounded-t-lg flex items-center gap-2 text-xs font-bold transition-all ${activeTab === 'topology' ? 'bg-[#0a0a0b] text-indigo-400 border-t border-l border-r border-zinc-800' : 'text-zinc-500 hover:text-zinc-300'}`}
+          >
+            <Network className="w-4 h-4" /> MAPA LÓGICO
+          </button>
         </div>
 
         {/* CONTENEDOR */}
@@ -184,12 +194,11 @@ function ReportsDashboard() {
 
               
               {activeTab === 'yara' && (
-                <pre className="text-magenta-400 font-mono text-sm leading-relaxed p-4 bg-zinc-950 rounded-lg border border-zinc-800/80">
-                  <code>{reportYara}</code>
-                </pre>
+                <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                  <YaraViewer code={reportYara} />
+                </div>
               )}
 
-              
               {activeTab === 'strategy' && (
                 <div className="max-w-4xl mx-auto">
                   {reportStrategy && reportStrategy.steps ? (
@@ -202,7 +211,12 @@ function ReportsDashboard() {
                   )}
                 </div>
               )}
-
+              {activeTab === 'topology' && (
+                <div className="animate-in fade-in zoom-in-95 duration-500 h-full min-h-[500px]">
+                  {/* Le pasamos el target actual al componente para que sepa qué dibujar */}
+                  <NetworkMap target={selectedReport?.target} />
+                </div>
+              )}
             </div>
           )}
         </div>
