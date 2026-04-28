@@ -1,13 +1,13 @@
 {
-    "timestamp": "2026-04-26T18:38:07.416114",
+    "timestamp": "2026-04-28T01:12:56.409055",
     "target": "186.64.114.50",
-    "stealth_level": 6,
+    "stealth_level": 5,
     "optimization_metrics": {
-        "wait_time_ms": 940.0103212173497,
-        "packet_size": 222,
-        "threads": 1,
-        "noise_score_f1": 1.322194439460801,
-        "estimated_time_f2": 75.6318412901363
+        "wait_time_ms": 18.093373219203666,
+        "packet_size": 1493,
+        "threads": 2,
+        "noise_score_f1": 141.45142021803383,
+        "estimated_time_f2": 0.7069564932318074
     },
     "findings": {
         "open_ports_count": 3,

@@ -99,3 +99,47 @@ export const TopologyService = {
         }
     }
 };
+
+
+export const NmapTecniqueService = {
+  runActiveScan: async (target, stealth, ports) => {
+    try {
+      const response = await api.post(`/api/nmap`, {
+        target: target,
+        stealth: parseInt(stealth),
+        ports: parseInt(ports)
+      });
+
+      return response.data;
+    }
+    catch (error) {
+      console.error(`Error al ejecutar el escaneo activo para ${target}:`, error);
+      throw error;
+    }
+  }
+};
+
+
+export const CVEService = {
+    getCVEs: async (serviceBanner) => {
+        try {
+            const response = await api.get(`/api/cve/${encodeURIComponent(serviceBanner)}`);
+            return response.data;
+        } catch (error) {
+            console.error(`Error al obtener CVEs para ${serviceBanner}:`, error);
+            throw error;
+        }
+    }
+};
+
+export const StrategyService = {
+    getStrategy: async (target, stealth, findings) => {
+        try {
+            const response = await api.post(`/api/strategy/live`, { target, stealth, findings });
+            return response.data;
+        } catch (error) {
+            console.error(`Error al obtener la estrategia para ${target}:`, error);
+            throw error;
+        }
+    }
+};

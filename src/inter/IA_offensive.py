@@ -21,7 +21,7 @@ def generar_ruta_ataque(hallazgos: list, noise_score: float):
     """
 
     llm = ChatOpenAI(
-        model_name="gpt-5-mini",
+        model_name="gpt-5",
         openai_api_key=os.getenv("GITHUB_TOKEN"),
         temperature=0.2,
         base_url="https://models.inference.ai.azure.com"

@@ -3,65 +3,72 @@
         {
             "id": 1,
             "phase": "Reconocimiento",
-            "action": "Escaneo agresivo dirigido (nmap -T4/5 con scripts de banner y versi\u00f3n) sobre puertos 21,25,80 para confirmar servicios, enumerar hosts y recolectar versiones; recolecci\u00f3n de banners HTTP/FTP y fingerprinting r\u00e1pido del stack web.",
+            "action": "Ampliar el escaneo con detecci\u00f3n agresiva de versiones y scripts sobre 21/25/80 y barrido r\u00e1pido de todos los puertos TCP para descubrir superficies adicionales; identificar tecnolog\u00edas web y cabeceras.",
             "risk": "alto",
-            "justification": "Noise Score 35.11 indica enfoque ruidoso; los banners detectados (FTP: mensaje de desconexi\u00f3n, HTTP 200, SMTP inferido) y el OS Linux/Unix justifican un escaneo veloz para maximizar superficie explotable antes de cambios en el entorno."
+            "justification": "Con Noise alto (79.90) priorizamos velocidad: un reconocimiento intensivo reduce ciclos y descubre servicios/puertos no listados que habilitan rutas de explotaci\u00f3n m\u00e1s r\u00e1pidas."
         },
         {
             "id": 2,
-            "phase": "Enumeraci\u00f3n FTP",
-            "action": "Intentar acceso an\u00f3nimo y enumeraci\u00f3n de directorios; si falla, forzar credenciales con ataques masivos (hydra/medusa) contra FTP aprovechando listas de credenciales y combinaciones derivadas de usuario SMTP/HTTP; probar carga de archivos y permisos de escritura en directorios accesibles.",
+            "phase": "Enumeraci\u00f3n",
+            "action": "Probar acceso FTP an\u00f3nimo y listar directorios; comprobar permisos de lectura/escritura en rutas comunes; si falla, realizar password spraying agresivo con diccionarios reducidos sobre usuarios probables (anonymous, ftp, admin, www-data).",
             "risk": "alto",
-            "justification": "Puerto 21 abierto con banner que sugiere servidor activo y desconexi\u00f3n por inactividad \u2014 condici\u00f3n aprovechable con ataques r\u00e1pidos; Linux/Unix suele alojar binarios o webs en home/public_html que permiten escalada si se puede escribir."
+            "justification": "FTP en Linux/Unix suele estar mal configurado; probar anonymous y un spray corto es de alto rendimiento y coherente con un enfoque r\u00e1pido y ruidoso."
         },
         {
             "id": 3,
-            "phase": "Enumeraci\u00f3n SMTP y abuso",
-            "action": "Ejecutar pruebas de enumeraci\u00f3n de usuarios (VRFY/EXPN/RCPT), comprobaci\u00f3n de relay abierto y exploraci\u00f3n para credential harvesting; realizar password spray limitado y env\u00edo masivo de correos de prueba para validar relay y exfiltraci\u00f3n por canal SMTP si es vulnerable.",
+            "phase": "Explotaci\u00f3n",
+            "action": "Si existe escritura en FTP, intentar identificar la ra\u00edz web (p. ej., subir canarios a rutas t\u00edpicas) y, si es accesible v\u00eda HTTP, cargar un webshell/dropper para obtener RCE inmediata; mantener la sesi\u00f3n activa por el l\u00edmite de inactividad de 10 minutos.",
             "risk": "alto",
-            "justification": "Puerto 25 abierto (servicio inferido) permite enumeraci\u00f3n y posibles vectores de exfiltraci\u00f3n/relay; dado el enfoque ruidoso, el objetivo es identificar credenciales o canales de salida r\u00e1pidamente."
+            "justification": "Encadenar FTP\u2192HTTP es una v\u00eda directa hacia RCE sin depender de vulnerabilidades complejas; el banner de FTP no restringe esta t\u00e1ctica y el impacto es alto."
         },
         {
             "id": 4,
-            "phase": "Enumeraci\u00f3n web agresiva",
-            "action": "Fuzzing y brute-force de directorios/archivos (gobuster/ffuf) contra HTTP, identificaci\u00f3n de endpoints de subida, paneles de administraci\u00f3n y par\u00e1metros vulnerables; ejecuci\u00f3n de esc\u00e1neres autom\u00e1ticos de vulnerabilidades web (sqlmap, nikto) con pruebas r\u00e1pidas para RCE/LFI/RFI/file upload.",
+            "phase": "Enumeraci\u00f3n",
+            "action": "Realizar descubrimiento de contenido HTTP agresivo (fuzzing de rutas y extensiones), fingerprint de frameworks/CMS y detecci\u00f3n automatizada de endpoints con capacidad de subida, deserializaci\u00f3n, LFI/RFI y formularios susceptibles.",
             "risk": "alto",
-            "justification": "Puerto 80 responde 200 OK; escaneo agresivo es coherente con nivel de ruido elevado para descubrir r\u00e1pidamente puntos de entrada explotables en el stack Linux/Unix."
+            "justification": "El servicio HTTP responde 200 OK; sin indicios de WAF, un fuzzing intensivo revela r\u00e1pidamente superficie explotable, alineado con el objetivo de velocidad."
         },
         {
             "id": 5,
-            "phase": "Explotaci\u00f3n inicial",
-            "action": "Usar credenciales descubiertas o vectores de upload/execution identificados para introducir un payload (webshell/FTP dropper); si existe acceso FTP con escritura, subir un binario o webshell; si web permite upload o RCE, desplegar acceso remoto inmediato.",
+            "phase": "Explotaci\u00f3n",
+            "action": "Abusar de cargas de archivos o endpoints con RCE/deserializaci\u00f3n si existen; priorizar vectores sin autenticaci\u00f3n y, en su defecto, intentar credenciales por defecto/conocidas en paneles de administraci\u00f3n detectados.",
             "risk": "alto",
-            "justification": "Priorizar ganancia r\u00e1pida de c\u00f3digo en m\u00e1quina objetivo aprovechando ftp/http; Linux/Unix y accesos detectados hacen probable la ejecuci\u00f3n remota si se logra escribir en el sistema."
+            "justification": "Las malas configuraciones de subida y endpoints de RCE permiten compromiso inmediato; probar credenciales por defecto acelera el acceso con bajo costo adicional."
         },
         {
             "id": 6,
-            "phase": "Post-explotaci\u00f3n y escalada",
-            "action": "Enumerar localmente usuarios, permisos SUID/SGID, configuraciones de cron, ficheros con credenciales y servicios internos; intentar escalada con exploits locales conocidos (kernel/userspace) y pivotar a servicios internos por SMTP o HTTP si existen rutas.",
+            "phase": "Explotaci\u00f3n",
+            "action": "Ejecutar pruebas automatizadas de SQLi sobre par\u00e1metros identificados; si se confirma, extraer credenciales/tokens y, si el motor lo permite, escribir archivos en la ra\u00edz web para conseguir RCE.",
             "risk": "alto",
-            "justification": "Una vez logrado acceso, la escalada r\u00e1pida maximiza beneficio antes de detecci\u00f3n; Linux/Unix dispone de vectores comunes (SUID, crontab, credenciales en archivos) detectables con enumeraci\u00f3n automatizada."
+            "justification": "SQLi contin\u00faa siendo prevalente; la explotaci\u00f3n automatizada puede entregar datos sensibles y/o RCE v\u00eda escritura de archivos en Linux/Unix con gran rapidez."
         },
         {
             "id": 7,
-            "phase": "Movimiento lateral y persistencia",
-            "action": "Reutilizar credenciales encontradas para autenticarse en otros servicios (SMTP/FTP/HTTP) y desplegar mecanismos de persistencia r\u00e1pidos (cron job, servicio systemd, webshell persistente); crear canales de control temporales cifrados para operaciones posteriores.",
+            "phase": "Enumeraci\u00f3n",
+            "action": "Evaluar SMTP: probar open relay de forma controlada, realizar VRFY/EXPN para enumeraci\u00f3n r\u00e1pida y detectar soporte de SMTP AUTH y mecanismos disponibles.",
             "risk": "alto",
-            "justification": "Con servicios SMTP/FTP/HTTP detectados, la reutilizaci\u00f3n y pivot r\u00e1pido es coherente con estrategia ruidosa para maximizar alcance antes de respuesta defensiva."
+            "justification": "SMTP en 25 puede exponer open relay o permitir enumeraci\u00f3n de usuarios; identificarlo pronto habilita pivotes de credenciales y vector de acceso adicional."
         },
         {
             "id": 8,
-            "phase": "Exfiltraci\u00f3n",
-            "action": "Compactar datos sensibles identificados y exfiltrarlos por el canal m\u00e1s disponible y ruidoso detectado (SMTP relay si abierto, HTTP POST a servidor controlado o FTP upload); automatizar transferencia y verificar integridad fuera de la red objetivo.",
+            "phase": "Explotaci\u00f3n",
+            "action": "Si hay open relay, validar env\u00edo controlado para confirmar abuso; si hay SMTP AUTH, realizar password spraying agresivo con diccionario reducido; reutilizar credenciales v\u00e1lidas en otros servicios (FTP/HTTP).",
             "risk": "alto",
-            "justification": "Dado el enfoque agresivo, usar canales detectados (25/80/21) para exfiltrar r\u00e1pido; SMTP/HTTP/FTP brindan rutas pr\u00e1cticas en sistemas Linux/Unix identificados."
+            "justification": "Open relay y autenticaciones d\u00e9biles ofrecen acceso r\u00e1pido a informaci\u00f3n y posibles credenciales reutilizadas, acelerando el movimiento entre servicios."
         },
         {
             "id": 9,
-            "phase": "Limpieza m\u00ednima / mantenimiento de acceso",
-            "action": "Si el objetivo requiere permanencia, dejar backdoor discreto (usuario con clave fuerte, key-based SSH si posible) y/o conservar webshell con nombre y permisos cambiados; registrar cambios cr\u00edticos para posible revert por el equipo red team cuando corresponda.",
+            "phase": "Movimiento lateral",
+            "action": "Correlacionar y reutilizar credenciales obtenidas en FTP/HTTP/SMTP; intentar acceso a paneles administrativos HTTP y fortalecer acceso a la m\u00e1quina objetivo; si se obtiene shell, enumerar para escalado de privilegios (sudoers, SUID, kernels vulnerables).",
             "risk": "alto",
-            "justification": "Persistencia r\u00e1pida permite retorno pero incrementa huella; con Noise Score alto se prioriza acceso continuado pese al aumento de ruido, documentando cambios para control del equipo."
+            "justification": "La reutilizaci\u00f3n de credenciales es un patr\u00f3n com\u00fan que permite ampliar acceso con rapidez; un escalado local en Linux/Unix maximiza el impacto del compromiso inicial."
+        },
+        {
+            "id": 10,
+            "phase": "Post-explotaci\u00f3n",
+            "action": "Establecer persistencia temporal (tareas programadas/t\u00faneles inversos) y recolectar artefactos de alto valor (configuraciones de servicios, claves, credenciales) priorizando velocidad; posponer limpieza exhaustiva dado el enfoque agresivo.",
+            "risk": "alto",
+            "justification": "Con un enfoque orientado a velocidad, asegurar continuidad y demostrar impacto r\u00e1pidamente es prioritario frente al sigilo."
         }
     ]
 }

@@ -1,41 +1,48 @@
 import { useState, useEffect, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
-import { FileText, Code, Database, Clock, Loader2, Activity, Download, ShieldAlert, Network } from 'lucide-react';
+import { FileText, Code, Database, Clock, Loader2, Activity, Download, ShieldAlert, Network, Terminal } from 'lucide-react';
 import { reportService, auditService } from '../services/api';
-import AttackRoadmap from '../components/AttackRoadmap';
+
+// 🧩 IMPORTACIÓN DE COMPONENTES
 import YaraViewer from '../components/YaraViewer';
 import NetworkMap from '../components/NetworkMap';
+import NmapTecnique from '../components/NmapTecnique';
+import OffensiveStrategy from '../components/OffensiveStrategy';
 
 function ReportsDashboard() {
   const [activeTab, setActiveTab] = useState('ia');
+  
+  
   const [reportMarkdown, setReportMarkdown] = useState('');
   const [reportYara, setReportYara] = useState('');
-  const [reportStrategy, setReportStrategy] = useState(null); 
   
   const [reports, setReports] = useState([]);
   const [selectedReport, setSelectedReport] = useState(null);
-  
   const [loadingContent, setLoadingContent] = useState(false);
   const [loadingList, setLoadingList] = useState(true);
+
+  
+  const [globalNmapFindings, setGlobalNmapFindings] = useState(null);
+  const [globalTarget, setGlobalTarget] = useState("186.64.114.50");
+  const [globalStealth, setGlobalStealth] = useState(5);
 
   const handleReportClick = useCallback(async (report) => {
     setLoadingContent(true);
     setSelectedReport(report);
 
     try {
-      const [markdownRes, yaraRes, strategyRes] = await Promise.all([
+      const [markdownRes, yaraRes] = await Promise.all([
         reportService.getReportContent(report.filename),
-        reportService.getYaraRule(report.target),
-        reportService.getStrategy(report.target).catch(() => null) 
+        reportService.getYaraRule(report.target)
       ]);
       
       setReportMarkdown(markdownRes.content);
       setReportYara(yaraRes.content);
-      setReportStrategy(strategyRes);
+      setGlobalTarget(report.target);
 
     } catch (error) {
       console.error("Error al cargar datos del reporte:", error);
-      setReportMarkdown("## ⚠️ Error Crítico\nNo se pudo recuperar el análisis de inteligencia de la base de datos.");
+      setReportMarkdown("## ⚠️ Error Crítico\nNo se pudo recuperar el análisis.");
       setReportYara("// Error de extracción de la regla YARA");
     } finally {
       setLoadingContent(false);
@@ -48,28 +55,23 @@ function ReportsDashboard() {
     void auditService.getReports()
       .then((data) => {
         if (!isMounted) return;
-
         setReports(data);
         if (data.length > 0) {
           handleReportClick(data[0]); 
         }
       })
-      .catch((error) => {
-        console.error("Error al cargar la lista de reportes:", error);
-      })
+      .catch((error) => console.error("Error al cargar reportes:", error))
       .finally(() => {
         if (isMounted) setLoadingList(false);
       });
 
-    return () => {
-      isMounted = false;
-    };
+    return () => { isMounted = false; };
   }, [handleReportClick]);
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 h-[75vh]">
       
-      
+      {/* 🗄️ PANEL IZQUIERDO: ARCHIVOS CLASIFICADOS */}
       <section className="lg:col-span-3 bg-[#121214] rounded-xl border border-zinc-800/80 shadow-2xl flex flex-col overflow-hidden">
         <div className="p-4 border-b border-zinc-800/80 bg-zinc-900/50">
           <div className="flex items-center justify-between gap-3">
@@ -82,7 +84,7 @@ function ReportsDashboard() {
               disabled={!selectedReport}
               className="inline-flex items-center gap-2 px-3 py-2 rounded border border-zinc-800 bg-zinc-900 text-zinc-300 text-xs font-semibold uppercase tracking-widest disabled:opacity-40 disabled:cursor-not-allowed hover:bg-zinc-800"
             >
-              <Download className="w-4 h-4" /> Exportar PDF
+              <Download className="w-4 h-4" /> Exportar
             </button>
           </div>
         </div>
@@ -107,13 +109,13 @@ function ReportsDashboard() {
                   Target: {rep.target}
                 </p>
                 <p className="text-zinc-500 text-[10px] mt-1 flex items-center gap-1">
-                   <Clock className="w-3 h-3" /> ARCHIVO MD: {rep.filename.split('_').pop()}
+                   <Clock className="w-3 h-3" /> MD: {rep.filename.split('_').pop()}
                 </p>
               </button>
             ))
           ) : (
             <div className="text-zinc-600 text-xs italic text-center mt-10">
-              No hay inteligencia almacenada en la base de datos.
+              No hay inteligencia almacenada.
             </div>
           )}
         </div>
@@ -122,37 +124,41 @@ function ReportsDashboard() {
       
       <section className="lg:col-span-9 bg-[#121214] rounded-xl border border-zinc-800/80 shadow-2xl flex flex-col overflow-hidden">
         
-        {/* NAVEGACIÓN */}
-        <div className="flex border-b border-zinc-800/80 bg-zinc-900/50 px-4 pt-4 gap-2">
+        
+        <div className="flex border-b border-zinc-800/80 bg-zinc-900/50 px-4 pt-4 gap-2 overflow-x-auto custom-scrollbar">
           <button 
             onClick={() => setActiveTab('ia')}
-            className={`px-4 py-2 rounded-t-lg flex items-center gap-2 text-xs font-bold transition-all ${activeTab === 'ia' ? 'bg-[#0a0a0b] text-cyan-400 border-t border-l border-r border-zinc-800' : 'text-zinc-500 hover:text-zinc-300'}`}
+            className={`px-4 py-2 rounded-t-lg flex items-center gap-2 text-xs font-bold transition-all whitespace-nowrap ${activeTab === 'ia' ? 'bg-[#0a0a0b] text-cyan-400 border-t border-l border-r border-zinc-800' : 'text-zinc-500 hover:text-zinc-300'}`}
           >
             <FileText className="w-4 h-4" /> ANÁLISIS IA
           </button>
           <button 
             onClick={() => setActiveTab('yara')}
-            className={`px-4 py-2 rounded-t-lg flex items-center gap-2 text-xs font-bold transition-all ${activeTab === 'yara' ? 'bg-[#0a0a0b] text-magenta-400 border-t border-l border-r border-zinc-800' : 'text-zinc-500 hover:text-zinc-300'}`}
+            className={`px-4 py-2 rounded-t-lg flex items-center gap-2 text-xs font-bold transition-all whitespace-nowrap ${activeTab === 'yara' ? 'bg-[#0a0a0b] text-magenta-400 border-t border-l border-r border-zinc-800' : 'text-zinc-500 hover:text-zinc-300'}`}
           >
             <Code className="w-4 h-4" /> REGLAS YARA
           </button>
           <button 
             onClick={() => setActiveTab('strategy')}
-            className={`px-4 py-2 rounded-t-lg flex items-center gap-2 text-xs font-bold transition-all ${activeTab === 'strategy' ? 'bg-[#0a0a0b] text-fuchsia-400 border-t border-l border-r border-zinc-800' : 'text-zinc-500 hover:text-zinc-300'}`}
+            className={`px-4 py-2 rounded-t-lg flex items-center gap-2 text-xs font-bold transition-all whitespace-nowrap ${activeTab === 'strategy' ? 'bg-[#0a0a0b] text-fuchsia-400 border-t border-l border-r border-zinc-800' : 'text-zinc-500 hover:text-zinc-300'}`}
           >
             <ShieldAlert className="w-4 h-4" /> ESTRATEGIA OFENSIVA
           </button>
-
-          {/* Topologia de red */}
           <button 
             onClick={() => setActiveTab('topology')}
-            className={`px-4 py-2 rounded-t-lg flex items-center gap-2 text-xs font-bold transition-all ${activeTab === 'topology' ? 'bg-[#0a0a0b] text-indigo-400 border-t border-l border-r border-zinc-800' : 'text-zinc-500 hover:text-zinc-300'}`}
+            className={`px-4 py-2 rounded-t-lg flex items-center gap-2 text-xs font-bold transition-all whitespace-nowrap ${activeTab === 'topology' ? 'bg-[#0a0a0b] text-indigo-400 border-t border-l border-r border-zinc-800' : 'text-zinc-500 hover:text-zinc-300'}`}
           >
             <Network className="w-4 h-4" /> MAPA LÓGICO
           </button>
+          <button 
+            onClick={() => setActiveTab('nmap')}
+            className={`px-4 py-2 rounded-t-lg flex items-center gap-2 text-xs font-bold transition-all whitespace-nowrap ${activeTab === 'nmap' ? 'bg-[#0a0a0b] text-cyan-500 border-t border-l border-r border-zinc-800 shadow-[0_-5px_10px_-5px_rgba(6,182,212,0.2)]' : 'text-zinc-500 hover:text-zinc-300'}`}
+          >
+            <Terminal className="w-4 h-4" /> NMAP
+          </button>
         </div>
 
-        {/* CONTENEDOR */}
+        
         <div className="p-8 flex-1 overflow-y-auto bg-[#0a0a0b] m-4 rounded border border-zinc-800/50 shadow-inner custom-scrollbar">
           {loadingContent ? (
             <div className="h-full flex flex-col items-center justify-center space-y-4 opacity-50">
@@ -160,11 +166,11 @@ function ReportsDashboard() {
               <p className="text-cyan-500 text-xs tracking-widest uppercase">Descifrando Inteligencia...</p>
             </div>
           ) : (
-            <div className="animate-in fade-in duration-500">
+            <div className="h-full">
               
-              
+             
               {activeTab === 'ia' && (
-                <div className="max-w-4xl mx-auto">
+                <div className="animate-in fade-in duration-500 max-w-4xl mx-auto">
                   <ReactMarkdown
                     components={{
                       h1: ({ children }) => <h1 className="text-2xl font-bold text-white mb-6 pb-2 border-b border-zinc-800 tracking-tight">{children}</h1>,
@@ -199,24 +205,38 @@ function ReportsDashboard() {
                 </div>
               )}
 
+              
               {activeTab === 'strategy' && (
-                <div className="max-w-4xl mx-auto">
-                  {reportStrategy && reportStrategy.steps ? (
-                    <AttackRoadmap steps={reportStrategy.steps} />
-                  ) : (
-                    <div className="flex flex-col items-center justify-center py-20 opacity-50">
-                      <ShieldAlert className="w-12 h-12 text-zinc-600 mb-4" />
-                      <p className="text-zinc-500 text-sm uppercase tracking-widest">No hay ruta de ataque generada para este objetivo.</p>
-                    </div>
-                  )}
+                <div className="animate-in fade-in duration-500 h-full">
+                  <OffensiveStrategy
+                    findings={globalNmapFindings} 
+                    target={globalTarget} 
+                    stealth={globalStealth} 
+                  />
                 </div>
               )}
+
+              
               {activeTab === 'topology' && (
                 <div className="animate-in fade-in zoom-in-95 duration-500 h-full min-h-[500px]">
-                  {/* Le pasamos el target actual al componente para que sepa qué dibujar */}
-                  <NetworkMap target={selectedReport?.target} />
+                  <NetworkMap target={globalTarget} />
                 </div>
               )}
+
+              
+              {activeTab === 'nmap' && (
+                <div className="animate-in fade-in slide-in-from-right-8 duration-500 h-full min-h-[500px]">
+                  <NmapTecnique 
+                    defaultTarget={globalTarget}
+                    onScanComplete={(target, stealth, findings) => {
+                      setGlobalTarget(target);
+                      setGlobalStealth(stealth);
+                      setGlobalNmapFindings(findings);
+                    }}
+                  />
+                </div>
+              )}
+
             </div>
           )}
         </div>

@@ -20,4 +20,3 @@ def get_db():
     finally:
         db.close()
 
-print(f"DEBUG: Intentando conectar a {SQLALCHEMY_DATABASE_URL}")

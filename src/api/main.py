@@ -1,3 +1,4 @@
+import ipaddress
 from fastapi import FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 import os
@@ -11,7 +12,10 @@ from .database import engine, get_db
 from sqlalchemy.orm import Session
 from fastapi import Depends
 from . import models
-
+import subprocess
+import xml.etree.ElementTree as ET
+import requests
+from src.inter.IA_offensive import generar_ruta_ataque
 
 
 #Iniciamos la aplicación FastAPI
@@ -38,6 +42,19 @@ class ScanRequest(BaseModel):
     stealth: int = Field(5, ge=1, le=10)
     ports: int = Field(100, ge=1)
     
+
+#Segunda clase para lo que es Nmap y sus resultados
+class NmapFinding(BaseModel):
+    port: int
+    service: str
+    banner: str
+
+
+#Tercera clase para lo que sería el escaneo en vivo
+class LiveStrategyRequest(BaseModel):
+    target: str
+    stealth: int
+    findings: list[NmapFinding]
 
 
 #Se crean las tablas
@@ -245,7 +262,7 @@ def get_topology(target: str, db: Session = Depends(get_db)):
         nodes.append({
             "id": port_id,
             "type": "tactical",
-            "position": {"x": 100 * (i + 1), "y": 300},
+            "position": {"x": (i * 180) + 50, "y": 300},
             "data": {
                 "type": nodo_tipo,
                 "label_title": f"Puerto {port_num}",
@@ -255,3 +272,131 @@ def get_topology(target: str, db: Session = Depends(get_db)):
         edges.append({"id": f"e-{port_id}", "source": "target", "target": port_id})
 
     return {"nodes": nodes, "edges": edges}
+
+
+@app.post("/api/nmap")
+def ejecutar_nmap(req: ScanRequest):
+    try:
+        ipaddress.ip_address(req.target)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Formato de IP inválido para orquestación.")
+
+    nmap_command = ["nmap", "-sV", "-O", "-oX", "-"]
+
+    
+    if req.stealth > 7:
+        nmap_command.append("-T0")
+    elif req.stealth > 4:
+        nmap_command.append("-T2")
+    else:
+        nmap_command.append("-T3")
+
+    
+    if req.ports < 65535:
+        nmap_command.extend(["--top-ports", str(req.ports)])
+    else:
+        nmap_command.append("-p-")
+
+    
+    nmap_command.append(req.target)
+
+    try:
+        result = subprocess.run(nmap_command, capture_output=True, text=True, check=True)
+        
+        root = ET.fromstring(result.stdout)
+        puertos_encontrados = []
+        
+        for host in root.findall('host'):
+            for port in host.findall('.//port'):
+                if port.find('state').get('state') == 'open':
+                    service = port.find('service')
+                    if service is not None:
+                        banner = f"{service.get('product', '')} {service.get('version', '')}".strip()
+                        puertos_encontrados.append({
+                            "port": int(port.get('portid')),
+                            "service": service.get('name', 'unknown').upper(), 
+                            "banner": banner if banner else "BANNER OCULTO"
+                        })
+                        
+        return {
+            "target": req.target,
+            "stealth_applied": req.stealth,
+            "status": "success",
+            "findings": puertos_encontrados
+        }
+
+    except subprocess.CalledProcessError as e:
+        raise HTTPException(status_code=500, detail=f"Fallo en ejecución de Nmap: {e.stderr}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    
+
+
+#Ahora para generar la busqueda de CVE's
+@app.get("/api/cve/{service_banner}")
+def buscar_cves(service_banner: str):
+    try:
+        print(f"🔍 [CVE] Buscando vulnerabilidades para: {service_banner}")
+        url = f"https://services.nvd.nist.gov/rest/json/cves/2.0?keywordSearch={service_banner}&resultsPerPage=5"
+        
+        
+        response = requests.get(url, timeout=15)
+        
+        if response.status_code != 200:
+            raise HTTPException(status_code=500, detail="Error al contactar la base de datos del NIST.")
+            
+        data = response.json()
+        vulnerabilidades = []
+        
+        for item in data.get("vulnerabilities", []):
+            cve_info = item.get("cve", {})
+            cve_id = cve_info.get("id", "Desconocido")
+            
+            
+            desc_list = cve_info.get("descriptions", [])
+            descripcion = desc_list[0].get("value", "Sin descripción") if desc_list else "Sin descripción"
+            
+            
+            metrics = cve_info.get("metrics", {})
+            score = "N/A"
+            severity = "UNKNOWN"
+            
+            if "cvssMetricV31" in metrics:
+                score = metrics["cvssMetricV31"][0]["cvssData"]["baseScore"]
+                severity = metrics["cvssMetricV31"][0]["cvssData"]["baseSeverity"]
+                
+            vulnerabilidades.append({
+                "id": cve_id,
+                "description": descripcion,
+                "score": score,
+                "severity": severity
+            })
+            
+        return {
+            "target_service": service_banner,
+            "total_found": len(vulnerabilidades),
+            "cves": vulnerabilidades
+        }
+
+    except requests.exceptions.Timeout:
+        raise HTTPException(status_code=504, detail="Timeout: La base de datos del NIST tardó mucho en responder.")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+    
+
+@app.post("/api/strategy/live")
+def generar_estrategia_en_vivo(req: LiveStrategyRequest):
+    try:
+        ruido_calculado = 10.0 - float(req.stealth)
+        hallazgos_texto = [
+            f"Puerto {f.port} ({f.service}) - Banner/Versión: {f.banner}" 
+            for f in req.findings
+        ]
+        
+    
+        estrategia_json = generar_ruta_ataque(hallazgos_texto, ruido_calculado)
+        return estrategia_json
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    
