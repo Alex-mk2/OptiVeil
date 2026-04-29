@@ -1,0 +1,53 @@
+{
+    "steps": [
+        {
+            "id": 1,
+            "phase": "Reconocimiento",
+            "action": "Escaneo agresivo y toma de banners: nmap TCP r\u00e1pido (-T4) con descubrimiento de servicios y versiones sobre el objetivo (puertos 22 y 80), wget/curl para confirmar banners HTTP/SSH, fingerprinting web con WhatWeb/Wappalyzer y captura de cabeceras completas.",
+            "risk": "alto",
+            "justification": "Confirmar y validar la presencia de OpenSSH 6.6.1p1 y servicio HTTP en 80; datos necesarios para priorizar vectores de ataque. T\u00e1ctica r\u00e1pida y ruidosa adecuada al Noise Score elevado."
+        },
+        {
+            "id": 2,
+            "phase": "Enumeraci\u00f3n",
+            "action": "Enumerar usuarios y rutas web p\u00fablicamente accesibles: fuerza bruta de directorios y ficheros con gobuster/dirb (wordlists grandes), enumeraci\u00f3n de hosts virtuales, identificaci\u00f3n de formularios, puntos de upload y par\u00e1metros GET/POST, y listado de usuarios v\u00e1lidos v\u00eda respuestas del SSH/banner timing.",
+            "risk": "alto",
+            "justification": "Descubrir paneles administrativos, endpoints de carga y recursos explotables en HTTP que permitan ejecuci\u00f3n remota o subida de webshells; enfoque ruidoso y automatizado para descubrir r\u00e1pidamente superficie de ataque."
+        },
+        {
+            "id": 3,
+            "phase": "Acceso inicial - SSH",
+            "action": "Ataque directo a SSH: password spraying y credential stuffing contra el servicio OpenSSH 6.6.1p1 usando listas de contrase\u00f1as comunes y credenciales filtradas (herramientas: hydra/medusa), intentos de login con claves privadas encontradas o reutilizadas; paralelizar intentos para velocidad.",
+            "risk": "alto",
+            "justification": "OpenSSH antiguo puede ser m\u00e1s propenso a configuraciones d\u00e9biles y credenciales reutilizadas. Dado el alto ruido aceptable, priorizar accesos r\u00e1pidos sobre sigilo."
+        },
+        {
+            "id": 4,
+            "phase": "Acceso inicial - Web",
+            "action": "Explotaci\u00f3n agresiva de vectores web descubiertos: pruebas autom\u00e1ticas con nikto/skipfish/OWASP ZAP para RCE, LFI/RFI, file upload bypasses; intentar upload de webshells PHP/CGI y uso de plantillas de payloads hasta obtener ejecuci\u00f3n remota.",
+            "risk": "alto",
+            "justification": "El servicio HTTP en 80 suele ofrecer vectores de ejecuci\u00f3n remota m\u00e1s inmediatos. Escaneo y explotaci\u00f3n automatizada maximizan velocidad a costa de ruido, adecuado al contexto."
+        },
+        {
+            "id": 5,
+            "phase": "Establecer acceso persistente y lateral",
+            "action": "Si se consigue shell (via SSH o webshell), a\u00f1adir clave p\u00fablica a ~/.ssh/authorized_keys, crear usuario con sudo restringido si es posible, establecer t\u00faneles reversos y port forwarding para pivotar a la red interna; desplegar herramientas livianas (netcat, socat) para movimiento lateral.",
+            "risk": "alto",
+            "justification": "Persistencia y pivot r\u00e1pido permiten explotar recursos internos tras acceso inicial. Cambios claros y ruidosos son aceptables dado el objetivo de rapidez."
+        },
+        {
+            "id": 6,
+            "phase": "Escalada de privilegios",
+            "action": "Ejecutar chequeos automatizados de escalada (linpeas, linux-exploit-suggester), revisar sudoers, SUID/SGID, servicios con credenciales en claro y versiones de kernel; si procede, intentar exploits p\u00fablicos de kernel/SUID conocidos aplicables a la versi\u00f3n detectada para obtener root.",
+            "risk": "alto",
+            "justification": "Acceso root maximiza impacto. Uso de exploit p\u00fablicos y checks automatizados acelera el proceso; riesgo alto y ruidoso pero coherente con la estrategia agresiva."
+        },
+        {
+            "id": 7,
+            "phase": "Exfiltraci\u00f3n y limpieza m\u00ednima",
+            "action": "Extraer datos sensibles identificados (credenciales, ficheros de configuraci\u00f3n, DB dumps) v\u00eda t\u00fanel cifrado o SCP; dejar mecanismos de acceso persistente si requerido por la operaci\u00f3n (usuario backdoor/clave) y documentar trazas modificadas para reporte; opcional: eliminar logs en directorios accesibles con privilegios obtenidos.",
+            "risk": "alto",
+            "justification": "Objetivos de impacto y extracci\u00f3n completan la ruta de ataque. Operaciones de limpieza y persistencia son ruidosas pero necesarias en un enfoque ofensivo/r\u00e1pido."
+        }
+    ]
+}

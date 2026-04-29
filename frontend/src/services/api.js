@@ -169,3 +169,15 @@ export const LatestAudit = {
         }   
     }
 };
+
+export const DeltaService = {
+    getDelta: async (target) => {
+        try {
+            const response = await api.get(`/api/delta/${target}`);
+            return response.data;
+        } catch (error) {
+            console.error(`Error al obtener el delta para ${target}:`, error);
+            throw error;
+        }
+    }
+};

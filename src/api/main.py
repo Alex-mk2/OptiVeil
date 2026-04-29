@@ -447,3 +447,41 @@ def get_latest_audit(target: str = None, db: Session = Depends(get_db)):
         "findings": latest_scan.findings,
         "strategy": latest_scan.attack_roadmap
     }
+    
+
+@app.get("/api/delta/{target}")
+def calculate_delta_registry(target: str, db: Session = Depends(get_db)):
+    """Calcula el delta táctico entre el último escaneo y el anterior para un objetivo específico."""
+    scans = db.query(models.AuditScan).filter(models.AuditScan.target == target).order_by(models.AuditScan.created_at.desc()).limit(2).all()
+    
+    
+    if len(scans) < 2:
+        return {"status": "insufficient_data", "message": "No hay suficientes escaneos para calcular delta."}
+    
+    
+    latest_findings = scans[0].findings if isinstance(scans[0].findings, list) else []
+    previous_findings = scans[1].findings if isinstance(scans[1].findings, list) else []
+    
+    
+    dict_latest = {item.get("port"): item for item in latest_findings if isinstance(item, dict) and "port" in item}
+    dict_previous = {item.get("port"): item for item in previous_findings if isinstance(item, dict) and "port" in item}
+    
+
+    latest_ports = set(dict_latest.keys())
+    previous_ports = set(dict_previous.keys())
+    
+    
+    added_ports = latest_ports - previous_ports
+    removed_ports = previous_ports - latest_ports
+    
+    added_list = [dict_latest[p] for p in added_ports]
+    removed_list = [dict_previous[p] for p in removed_ports]
+    
+    
+    return {
+        "status": "success",
+        "delta_score": len(added_list) + len(removed_list),
+        "added": added_list,
+        "removed": removed_list,
+        "changed": [] 
+    }

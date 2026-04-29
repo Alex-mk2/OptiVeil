@@ -1,12 +1,13 @@
 import { useState, useEffect, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { FileText, Code, Database, Clock, Loader2, Activity, Download, ShieldAlert, Network, Terminal } from 'lucide-react';
-import { reportService, auditService, PersistenceService, LatestAudit, DeltaAudit } from '../services/api';
+import { reportService, auditService, LatestAudit } from '../services/api';
 
 import YaraViewer from '../components/YaraViewer';
 import NetworkMap from '../components/NetworkMap';
 import NmapTecnique from '../components/NmapTecnique';
 import OffensiveStrategy from '../components/OffensiveStrategy';
+import Delta from '../components/Delta';
 
 function ReportsDashboard() {
   const [activeTab, setActiveTab] = useState('ia');
@@ -19,8 +20,6 @@ function ReportsDashboard() {
   const [globalNmapFindings, setGlobalNmapFindings] = useState(null);
   const [globalTarget, setGlobalTarget] = useState("");
   const [globalStealth, setGlobalStealth] = useState(5);
-  const [deltaData, setDeltaData] = useState(null);
-  const [loadingDelta, setLoadingDelta] = useState(false);
 
   useEffect(() => {
     const recuperarMemoria = async () => {
@@ -169,18 +168,7 @@ function ReportsDashboard() {
             <Terminal className="w-4 h-4" /> NMAP
           </button>
           <button 
-            onClick={async () => {
-              setActiveTab('delta');
-              setLoadingDelta(true);
-              try {
-                const data = await DeltaAudit.getDeltaAnalysis(globalTarget);
-                setDeltaData(data);
-              } catch (e) {
-                console.error(e);
-              } finally {
-                setLoadingDelta(false);
-              }
-            }}
+            onClick={() => setActiveTab('delta')}
             className={`px-4 py-2 rounded-t-lg flex items-center gap-2 text-xs font-bold transition-all whitespace-nowrap ${activeTab === 'delta' ? 'bg-[#0a0a0b] text-yellow-400 border-t border-l border-r border-zinc-800 shadow-[0_-5px_10px_-5px_rgba(250,204,21,0.2)]' : 'text-zinc-500 hover:text-zinc-300'}`}
           >
             <Activity className="w-4 h-4" /> ANÁLISIS DELTA
@@ -251,76 +239,17 @@ function ReportsDashboard() {
                 <div className="animate-in fade-in slide-in-from-right-8 duration-500 h-full min-h-[500px]">
                   <NmapTecnique 
                     defaultTarget={globalTarget}
-                    onScanComplete={async (target, stealth, findings) => {
+                    onScanComplete={(target, stealth, findings) => {
                       setGlobalTarget(target);
                       setGlobalStealth(stealth);
                       setGlobalNmapFindings(findings);
-
-                      try {
-                        await PersistenceService.syncData({
-                          target: target,
-                          stealth_level: stealth,
-                          findings: findings
-                        });
-                      } catch (err) {
-                        console.error(err);
-                      }
                     }}
                   />
                 </div>
               )}
 
               {activeTab === 'delta' && (
-                <div className="animate-in fade-in zoom-in-95 duration-500 h-full">
-                  <h2 className="text-xl font-bold text-yellow-400 mb-6 flex items-center gap-2">
-                    <Activity className="w-5 h-5" /> Evolución Táctica (Delta)
-                  </h2>
-                  
-                  {loadingDelta ? (
-                     <div className="flex justify-center items-center h-32"><Loader2 className="animate-spin text-yellow-400 w-8 h-8" /></div>
-                  ) : !deltaData || deltaData.status === "insufficient_data" ? (
-                    <div className="bg-zinc-900/50 border border-zinc-800 p-6 rounded text-center text-zinc-400">
-                      <p>Se necesitan al menos 2 escaneos históricos de la IP <b>{globalTarget}</b> para calcular la evolución.</p>
-                      <p className="text-xs mt-2 text-zinc-500">Ejecuta un nuevo escaneo en la pestaña NMAP para generar un punto de comparación.</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-6">
-                      <div className="bg-zinc-900 border border-zinc-800 p-4 rounded-lg flex items-center justify-between">
-                        <span className="text-zinc-300 font-mono text-sm">Índice de Volatilidad:</span>
-                        <span className="text-2xl font-bold text-white">{deltaData.delta_score}</span>
-                      </div>
-
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div className="border border-red-900/50 bg-red-900/10 rounded p-4">
-                          <h3 className="text-red-400 font-bold mb-3 text-sm">🔴 Nuevos Riesgos ({deltaData.added.length})</h3>
-                          {deltaData.added.map(p => (
-                            <div key={p.port} className="text-xs text-zinc-300 mb-1 border-b border-red-900/30 pb-1">
-                              Puerto {p.port} - {p.service}
-                            </div>
-                          ))}
-                        </div>
-
-                        <div className="border border-emerald-900/50 bg-emerald-900/10 rounded p-4">
-                          <h3 className="text-emerald-400 font-bold mb-3 text-sm">🟢 Mitigados ({deltaData.removed.length})</h3>
-                          {deltaData.removed.map(p => (
-                            <div key={p.port} className="text-xs text-zinc-300 mb-1 border-b border-emerald-900/30 pb-1">
-                              Puerto {p.port} - {p.service}
-                            </div>
-                          ))}
-                        </div>
-
-                        <div className="border border-yellow-900/50 bg-yellow-900/10 rounded p-4">
-                          <h3 className="text-yellow-400 font-bold mb-3 text-sm">🟡 Modificados ({deltaData.changed.length})</h3>
-                          {deltaData.changed.map(p => (
-                            <div key={p.port} className="text-xs text-zinc-300 mb-1 border-b border-yellow-900/30 pb-1">
-                              Puerto {p.port} ({p.old_service} ➔ {p.new_service})
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
+                <Delta target={globalTarget} />
               )}
 
             </div>
