@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
-def generar_ruta_ataque(hallazgos: list, noise_score: float):
+def generate_attack_path(hallazgos: list, noise_score: float):
     prompt_estratega = f"""
     ACTÚA COMO UN SENIOR PENTESTER / RED TEAM LEAD.
     Tu objetivo es transformar hallazgos técnicos en una ruta de ataque lógica.
@@ -21,7 +21,7 @@ def generar_ruta_ataque(hallazgos: list, noise_score: float):
     """
 
     llm = ChatOpenAI(
-        model_name="gpt-5",
+        model_name="gpt-5-mini",
         openai_api_key=os.getenv("GITHUB_TOKEN"),
         temperature=0.2,
         base_url="https://models.inference.ai.azure.com"

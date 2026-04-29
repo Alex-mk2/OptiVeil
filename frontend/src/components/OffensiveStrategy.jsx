@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { BrainCircuit, Loader2, Target, ShieldAlert } from 'lucide-react';
 import { StrategyService } from '../services/api';
 
-const OffensiveStrategy = ({ findings, target = "186.64.114.50", stealth = 5 }) => {
+const OffensiveStrategy = ({ findings, target = "", stealth = 5 }) => {
   const [loading, setLoading] = useState(false);
   const [strategy, setStrategy] = useState(null);
   const [error, setError] = useState(null);

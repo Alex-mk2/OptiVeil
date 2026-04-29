@@ -13,3 +13,4 @@ class AuditScan(Base):
     findings = Column(JSONB)        
     attack_roadmap = Column(JSONB)  
     created_at = Column(DateTime, default=datetime.utcnow)
+    scan_hash = Column(String, unique=True, index=True)

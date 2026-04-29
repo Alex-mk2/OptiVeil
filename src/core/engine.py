@@ -8,9 +8,9 @@ from modules.stealth.scanner import StealthScanner
 from utils.generate_report import save_audit_report
 from inter.fingerprint import ServiceIdentifier
 from inter.response import RuleGenerator
-from inter.IA_analyzer import analizar_auditoria
+from inter.IA_analyzer import analyze_audit
 from utils.pareto_plot import plot_pareto_front
-from inter.IA_offensive import generar_ruta_ataque
+from inter.IA_offensive import generate_attack_path
 
 class OptiVeilEngine:
     def __init__(self, target: str, stealth: int, ports_count: int):
@@ -71,14 +71,14 @@ class OptiVeilEngine:
             f.write(yara_rules)
 
         notify("Consultando al Analista de IA para reporte ejecutivo...")
-        reporte_ia = analizar_auditoria(ruta_reporte)
+        reporte_ia = analyze_audit(ruta_reporte)
         ruta_md = f"results/reports_IA/executive_{self.target.replace('.', '_')}.md"
         os.makedirs("results/reports_IA", exist_ok=True)
         with open(ruta_md, "w", encoding="utf-8") as f:
             f.write(reporte_ia)
         
         notify("Generando ruta de ataque ofensiva con IA...")
-        ruta_ataque = generar_ruta_ataque(hallazgos_detallados, best_config["metrics"]["noise_score"])
+        ruta_ataque = generate_attack_path(hallazgos_detallados, best_config["metrics"]["noise_score"])
         
         nombre_base = self.target.replace('.', '_')
         ruta_json_estrategia = os.path.join(f"results/attack_reports", f"strategy_{nombre_base}.json")

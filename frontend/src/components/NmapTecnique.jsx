@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Terminal, ShieldAlert, Cpu, Globe, Crosshair, Loader2, Search } from 'lucide-react';
 import { NmapTecniqueService, CVEService } from '../services/api';
 
-const NmapTecnique = ({ defaultTarget = "186.64.114.50", onScanComplete }) => {
+const NmapTecnique = ({ defaultTarget = "", onScanComplete }) => {
   const [target, setTarget] = useState(defaultTarget);
   const [stealth, setStealth] = useState(5);
   const [ports, setPorts] = useState(100);

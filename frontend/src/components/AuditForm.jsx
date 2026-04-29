@@ -3,7 +3,7 @@ import { Terminal, Radar, Activity } from 'lucide-react';
 
 
 function AuditForm({ onScan, loading }) {
-  const [target, setTarget] = useState('186.64.114.50');
+  const [target, setTarget] = useState('');
   const [stealth, setStealth] = useState(5);
   const [ports, setPorts] = useState(100);
 

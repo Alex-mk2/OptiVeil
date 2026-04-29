@@ -143,3 +143,29 @@ export const StrategyService = {
         }
     }
 };
+
+
+export const PersistenceService = {
+    syncData: async (data) => {
+        try {
+            const response = await api.post('/api/persistence/sync', data);
+            return response.data;
+        } catch (error) {
+            console.error("Error al sincronizar datos con la Bóveda:", error);
+            throw error;
+        }
+    }
+};
+
+
+export const LatestAudit = {
+    getLatestScans: async () => {
+        try {
+            const response = await api.get('/api/persistence/latest');
+            return response.data;
+        } catch (error) {
+            console.error("Error al obtener los últimos escaneos:", error);
+            throw error;
+        }   
+    }
+};

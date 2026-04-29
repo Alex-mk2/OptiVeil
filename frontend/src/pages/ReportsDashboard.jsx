@@ -1,9 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { FileText, Code, Database, Clock, Loader2, Activity, Download, ShieldAlert, Network, Terminal } from 'lucide-react';
-import { reportService, auditService } from '../services/api';
+import { reportService, auditService, PersistenceService, LatestAudit, DeltaAudit } from '../services/api';
 
-// 🧩 IMPORTACIÓN DE COMPONENTES
 import YaraViewer from '../components/YaraViewer';
 import NetworkMap from '../components/NetworkMap';
 import NmapTecnique from '../components/NmapTecnique';
@@ -11,39 +10,59 @@ import OffensiveStrategy from '../components/OffensiveStrategy';
 
 function ReportsDashboard() {
   const [activeTab, setActiveTab] = useState('ia');
-  
-  
   const [reportMarkdown, setReportMarkdown] = useState('');
   const [reportYara, setReportYara] = useState('');
-  
   const [reports, setReports] = useState([]);
   const [selectedReport, setSelectedReport] = useState(null);
   const [loadingContent, setLoadingContent] = useState(false);
   const [loadingList, setLoadingList] = useState(true);
-
-  
   const [globalNmapFindings, setGlobalNmapFindings] = useState(null);
-  const [globalTarget, setGlobalTarget] = useState("186.64.114.50");
+  const [globalTarget, setGlobalTarget] = useState("");
   const [globalStealth, setGlobalStealth] = useState(5);
+  const [deltaData, setDeltaData] = useState(null);
+  const [loadingDelta, setLoadingDelta] = useState(false);
+
+  useEffect(() => {
+    const recuperarMemoria = async () => {
+      try {
+        const data = await LatestAudit.getLatestScans();
+        if (data && data.has_data) {
+          setGlobalTarget(data.target);
+          setGlobalStealth(data.stealth_level);
+          setGlobalNmapFindings(data.findings);
+        }
+      } catch (error) {
+        console.error(error);
+      }
+    };
+    recuperarMemoria();
+  }, []);
 
   const handleReportClick = useCallback(async (report) => {
     setLoadingContent(true);
     setSelectedReport(report);
 
     try {
-      const [markdownRes, yaraRes] = await Promise.all([
+      const [markdownRes, yaraRes, dbRes] = await Promise.all([
         reportService.getReportContent(report.filename),
-        reportService.getYaraRule(report.target)
+        reportService.getYaraRule(report.target),
+        fetch(`http://localhost:8000/api/persistence/latest?target=${report.target}`).then(res => res.json())
       ]);
       
       setReportMarkdown(markdownRes.content);
       setReportYara(yaraRes.content);
       setGlobalTarget(report.target);
 
+      if (dbRes && dbRes.has_data) {
+        setGlobalNmapFindings(dbRes.findings);
+        setGlobalStealth(dbRes.stealth_level);
+      } else {
+        setGlobalNmapFindings([]);
+      }
     } catch (error) {
-      console.error("Error al cargar datos del reporte:", error);
+      console.error(error);
       setReportMarkdown("## ⚠️ Error Crítico\nNo se pudo recuperar el análisis.");
-      setReportYara("// Error de extracción de la regla YARA");
+      setReportYara("// Error de extracción");
     } finally {
       setLoadingContent(false);
     }
@@ -51,7 +70,6 @@ function ReportsDashboard() {
 
   useEffect(() => {
     let isMounted = true;
-
     void auditService.getReports()
       .then((data) => {
         if (!isMounted) return;
@@ -60,18 +78,15 @@ function ReportsDashboard() {
           handleReportClick(data[0]); 
         }
       })
-      .catch((error) => console.error("Error al cargar reportes:", error))
+      .catch((error) => console.error(error))
       .finally(() => {
         if (isMounted) setLoadingList(false);
       });
-
     return () => { isMounted = false; };
   }, [handleReportClick]);
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 h-[75vh]">
-      
-      {/* 🗄️ PANEL IZQUIERDO: ARCHIVOS CLASIFICADOS */}
       <section className="lg:col-span-3 bg-[#121214] rounded-xl border border-zinc-800/80 shadow-2xl flex flex-col overflow-hidden">
         <div className="p-4 border-b border-zinc-800/80 bg-zinc-900/50">
           <div className="flex items-center justify-between gap-3">
@@ -121,10 +136,7 @@ function ReportsDashboard() {
         </div>
       </section>
 
-      
       <section className="lg:col-span-9 bg-[#121214] rounded-xl border border-zinc-800/80 shadow-2xl flex flex-col overflow-hidden">
-        
-        
         <div className="flex border-b border-zinc-800/80 bg-zinc-900/50 px-4 pt-4 gap-2 overflow-x-auto custom-scrollbar">
           <button 
             onClick={() => setActiveTab('ia')}
@@ -156,9 +168,25 @@ function ReportsDashboard() {
           >
             <Terminal className="w-4 h-4" /> NMAP
           </button>
+          <button 
+            onClick={async () => {
+              setActiveTab('delta');
+              setLoadingDelta(true);
+              try {
+                const data = await DeltaAudit.getDeltaAnalysis(globalTarget);
+                setDeltaData(data);
+              } catch (e) {
+                console.error(e);
+              } finally {
+                setLoadingDelta(false);
+              }
+            }}
+            className={`px-4 py-2 rounded-t-lg flex items-center gap-2 text-xs font-bold transition-all whitespace-nowrap ${activeTab === 'delta' ? 'bg-[#0a0a0b] text-yellow-400 border-t border-l border-r border-zinc-800 shadow-[0_-5px_10px_-5px_rgba(250,204,21,0.2)]' : 'text-zinc-500 hover:text-zinc-300'}`}
+          >
+            <Activity className="w-4 h-4" /> ANÁLISIS DELTA
+          </button>
         </div>
 
-        
         <div className="p-8 flex-1 overflow-y-auto bg-[#0a0a0b] m-4 rounded border border-zinc-800/50 shadow-inner custom-scrollbar">
           {loadingContent ? (
             <div className="h-full flex flex-col items-center justify-center space-y-4 opacity-50">
@@ -168,7 +196,6 @@ function ReportsDashboard() {
           ) : (
             <div className="h-full">
               
-             
               {activeTab === 'ia' && (
                 <div className="animate-in fade-in duration-500 max-w-4xl mx-auto">
                   <ReactMarkdown
@@ -198,14 +225,12 @@ function ReportsDashboard() {
                 </div>
               )}
 
-              
               {activeTab === 'yara' && (
                 <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
                   <YaraViewer code={reportYara} />
                 </div>
               )}
 
-              
               {activeTab === 'strategy' && (
                 <div className="animate-in fade-in duration-500 h-full">
                   <OffensiveStrategy
@@ -216,24 +241,85 @@ function ReportsDashboard() {
                 </div>
               )}
 
-              
               {activeTab === 'topology' && (
                 <div className="animate-in fade-in zoom-in-95 duration-500 h-full min-h-[500px]">
                   <NetworkMap target={globalTarget} />
                 </div>
               )}
 
-              
               {activeTab === 'nmap' && (
                 <div className="animate-in fade-in slide-in-from-right-8 duration-500 h-full min-h-[500px]">
                   <NmapTecnique 
                     defaultTarget={globalTarget}
-                    onScanComplete={(target, stealth, findings) => {
+                    onScanComplete={async (target, stealth, findings) => {
                       setGlobalTarget(target);
                       setGlobalStealth(stealth);
                       setGlobalNmapFindings(findings);
+
+                      try {
+                        await PersistenceService.syncData({
+                          target: target,
+                          stealth_level: stealth,
+                          findings: findings
+                        });
+                      } catch (err) {
+                        console.error(err);
+                      }
                     }}
                   />
+                </div>
+              )}
+
+              {activeTab === 'delta' && (
+                <div className="animate-in fade-in zoom-in-95 duration-500 h-full">
+                  <h2 className="text-xl font-bold text-yellow-400 mb-6 flex items-center gap-2">
+                    <Activity className="w-5 h-5" /> Evolución Táctica (Delta)
+                  </h2>
+                  
+                  {loadingDelta ? (
+                     <div className="flex justify-center items-center h-32"><Loader2 className="animate-spin text-yellow-400 w-8 h-8" /></div>
+                  ) : !deltaData || deltaData.status === "insufficient_data" ? (
+                    <div className="bg-zinc-900/50 border border-zinc-800 p-6 rounded text-center text-zinc-400">
+                      <p>Se necesitan al menos 2 escaneos históricos de la IP <b>{globalTarget}</b> para calcular la evolución.</p>
+                      <p className="text-xs mt-2 text-zinc-500">Ejecuta un nuevo escaneo en la pestaña NMAP para generar un punto de comparación.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-6">
+                      <div className="bg-zinc-900 border border-zinc-800 p-4 rounded-lg flex items-center justify-between">
+                        <span className="text-zinc-300 font-mono text-sm">Índice de Volatilidad:</span>
+                        <span className="text-2xl font-bold text-white">{deltaData.delta_score}</span>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="border border-red-900/50 bg-red-900/10 rounded p-4">
+                          <h3 className="text-red-400 font-bold mb-3 text-sm">🔴 Nuevos Riesgos ({deltaData.added.length})</h3>
+                          {deltaData.added.map(p => (
+                            <div key={p.port} className="text-xs text-zinc-300 mb-1 border-b border-red-900/30 pb-1">
+                              Puerto {p.port} - {p.service}
+                            </div>
+                          ))}
+                        </div>
+
+                        <div className="border border-emerald-900/50 bg-emerald-900/10 rounded p-4">
+                          <h3 className="text-emerald-400 font-bold mb-3 text-sm">🟢 Mitigados ({deltaData.removed.length})</h3>
+                          {deltaData.removed.map(p => (
+                            <div key={p.port} className="text-xs text-zinc-300 mb-1 border-b border-emerald-900/30 pb-1">
+                              Puerto {p.port} - {p.service}
+                            </div>
+                          ))}
+                        </div>
+
+                        <div className="border border-yellow-900/50 bg-yellow-900/10 rounded p-4">
+                          <h3 className="text-yellow-400 font-bold mb-3 text-sm">🟡 Modificados ({deltaData.changed.length})</h3>
+                          {deltaData.changed.map(p => (
+                            <div key={p.port} className="text-xs text-zinc-300 mb-1 border-b border-yellow-900/30 pb-1">
+                              Puerto {p.port} ({p.old_service} ➔ {p.new_service})
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 

@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
-def analizar_auditoria(ruta_json: str):
+def analyze_audit(ruta_json: str):
     """Toma el JSON generado por OptiVeil y usa IA para redactar un reporte táctico."""
     try:
         with open(ruta_json, 'r') as f:

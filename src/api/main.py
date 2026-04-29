@@ -3,6 +3,7 @@ from fastapi import FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 import os
 import json
+from datetime import datetime
 from io import BytesIO
 import markdown
 from xhtml2pdf import pisa
@@ -15,7 +16,7 @@ from . import models
 import subprocess
 import xml.etree.ElementTree as ET
 import requests
-from src.inter.IA_offensive import generar_ruta_ataque
+from src.inter.IA_offensive import generate_attack_path
 
 
 #Iniciamos la aplicación FastAPI
@@ -24,6 +25,9 @@ app = FastAPI(
     description="API de la plataforma de auditoría evolutiva",
     version="1.0.0"
 )
+
+
+
 
 
 #Ahora se configura el cors (para permitir peticiones desde el frontend)
@@ -81,7 +85,8 @@ async def start_scan(request: ScanRequest, db: Session = Depends(get_db)):
             stealth_level=request.stealth,
             best_config=result["best_config"],
             findings=result["findings"],
-            attack_roadmap=result.get("attack_roadmap")
+            attack_roadmap=result.get("attack_roadmap"),
+            scan_hash=f"{request.target}-{datetime.utcnow().timestamp()}"
         )
         db.add(scan)
         db.commit()
@@ -275,7 +280,7 @@ def get_topology(target: str, db: Session = Depends(get_db)):
 
 
 @app.post("/api/nmap")
-def ejecutar_nmap(req: ScanRequest):
+def execute_nmap(req: ScanRequest):
     try:
         ipaddress.ip_address(req.target)
     except ValueError:
@@ -334,7 +339,7 @@ def ejecutar_nmap(req: ScanRequest):
 
 #Ahora para generar la busqueda de CVE's
 @app.get("/api/cve/{service_banner}")
-def buscar_cves(service_banner: str):
+def search_cves(service_banner: str):
     try:
         print(f"🔍 [CVE] Buscando vulnerabilidades para: {service_banner}")
         url = f"https://services.nvd.nist.gov/rest/json/cves/2.0?keywordSearch={service_banner}&resultsPerPage=5"
@@ -385,7 +390,7 @@ def buscar_cves(service_banner: str):
     
 
 @app.post("/api/strategy/live")
-def generar_estrategia_en_vivo(req: LiveStrategyRequest):
+def generate_live_strategy(req: LiveStrategyRequest):
     try:
         ruido_calculado = 10.0 - float(req.stealth)
         hallazgos_texto = [
@@ -394,9 +399,51 @@ def generar_estrategia_en_vivo(req: LiveStrategyRequest):
         ]
         
     
-        estrategia_json = generar_ruta_ataque(hallazgos_texto, ruido_calculado)
+        estrategia_json = generate_attack_path(hallazgos_texto, ruido_calculado)
         return estrategia_json
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     
+
+@app.post("/api/persistence/sync")
+def sync_persistence(data: dict, db: Session = Depends(get_db)): 
+    """Recibe datos de escaneo y los guarda en la Bóveda para su posterior consulta."""
+    try:
+        new_scan = models.AuditScan(
+            target=data.get("target"),
+            stealth_level=data.get("stealth_level", 5),
+            findings=data.get("findings"),
+            attack_roadmap=data.get("strategy"),
+            scan_hash=data.get("scan_hash", f"{data.get('target')}-{datetime.utcnow().timestamp()}")
+        )
+        db.add(new_scan)
+        db.commit()
+        db.refresh(new_scan)
+        return {"status": "success", "id": new_scan.id}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/persistence/latest")
+def get_latest_audit(target: str = None, db: Session = Depends(get_db)):
+    """Recupera el escaneo más reciente de la Bóveda."""
+    
+    query = db.query(models.AuditScan)
+    
+    if target:
+        query = query.filter(models.AuditScan.target == target)
+        
+    latest_scan = query.order_by(models.AuditScan.created_at.desc()).first()
+    
+    if not latest_scan:
+        return {"has_data": False}
+        
+    return {
+        "has_data": True,
+        "target": latest_scan.target,
+        "stealth_level": latest_scan.stealth_level,
+        "findings": latest_scan.findings,
+        "strategy": latest_scan.attack_roadmap
+    }
