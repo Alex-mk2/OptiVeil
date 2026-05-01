@@ -17,20 +17,13 @@ import subprocess
 import xml.etree.ElementTree as ET
 import requests
 from src.inter.IA_offensive import generate_attack_path
+from pydantic.networks import IPvAnyAddress
 
-
-#Iniciamos la aplicación FastAPI
 app = FastAPI(
     title="OptiVeil Core API",
-    description="API de la plataforma de auditoría evolutiva",
     version="1.0.0"
 )
 
-
-
-
-
-#Ahora se configura el cors (para permitir peticiones desde el frontend)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -43,54 +36,40 @@ app.add_middleware(
     allow_credentials=True
 )
 
-
-#Se define que se busca dentro del escaneo
 class ScanRequest(BaseModel):
-    target: str = Field(..., example="186.64.114.50")
+    target: IPvAnyAddress = Field(..., example="186.64.114.50")
     stealth: int = Field(5, ge=1, le=10)
     ports: int = Field(100, ge=1)
     
-
-#Segunda clase para lo que es Nmap y sus resultados
 class NmapFinding(BaseModel):
     port: int
     service: str
     banner: str
 
-
-#Tercera clase para lo que sería el escaneo en vivo
 class LiveStrategyRequest(BaseModel):
     target: str
     stealth: int
     findings: list[NmapFinding]
 
-
-#Se crean las tablas
 models.Base.metadata.create_all(bind=engine)
 
-
-#Ahora comienza lo que sería la configuracion de CRUD
 @app.get("/")
 def health_check():
-    """Checkear el estado de la API"""
     return {"status": "OptiVeil API is running"}
-
 
 @app.post("/api/scan")
 async def start_scan(request: ScanRequest, db: Session = Depends(get_db)):
-    """Instanciar el motor de auditoría y ejecutar el ciclo completo"""
     try:
-        engine = OptiVeilEngine(target=request.target, stealth=request.stealth, ports_count=request.ports)
+        engine = OptiVeilEngine(target=str(request.target), stealth=request.stealth, ports_count=request.ports)
         result = engine.execute()
         
-        
         scan = models.AuditScan(
-            target=request.target,
+            target=str(request.target),
             stealth_level=request.stealth,
             best_config=result["best_config"],
             findings=result["findings"],
             attack_roadmap=result.get("attack_roadmap"),
-            scan_hash=f"{request.target}-{datetime.utcnow().timestamp()}"
+            scan_hash=f"{str(request.target)}-{datetime.utcnow().timestamp()}"
         )
         db.add(scan)
         db.commit()
@@ -107,10 +86,8 @@ async def start_scan(request: ScanRequest, db: Session = Depends(get_db)):
         print(f"CRITICAL ERROR EN API: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @app.get("/api/reports/")
 def list_reports():
-    """Listar los reportes con metadatos para el frontend"""
     reports_dir = "results/reports_IA"
     if not os.path.exists(reports_dir):
         return [] 
@@ -128,10 +105,8 @@ def list_reports():
             
     return reports_data
 
-
 @app.get("/api/reports/{filename}")
 def get_report_content(filename: str):
-    """Lee y devuelve el contenido de un reporte Markdown específico."""
     file_path = os.path.join("results/reports_IA", filename)
     if not os.path.exists(file_path):
         raise HTTPException(status_code=404, detail="Reporte no encontrado")
@@ -139,10 +114,8 @@ def get_report_content(filename: str):
     with open(file_path, "r", encoding="utf-8") as f:
         return {"content": f.read()}
     
-
 @app.get("/api/rules/{target}")
 def get_rule_content(target: str):
-    """Busca la regla YARA asociada a un objetivo específico."""
     rules_dir = "results/rules"
     if not os.path.exists(rules_dir):
         return {"content": "// Carpeta de reglas no encontrada"}
@@ -155,7 +128,6 @@ def get_rule_content(target: str):
     
     return {"content": f"// Regla no encontrada para {target} (Busqué: {target_clean})"}
 
-
 @app.get("/api/reports/{filename}/pdf")
 async def export_report_pdf(filename: str):
     file_path = os.path.join("results/reports_IA", filename)
@@ -165,7 +137,6 @@ async def export_report_pdf(filename: str):
     with open(file_path, "r", encoding="utf-8") as f:
         md_content = f.read()
     html_content = markdown.markdown(md_content)
-    
     
     styled_html = f"""
     <html>
@@ -200,10 +171,8 @@ async def export_report_pdf(filename: str):
         }
     )
 
-
 @app.get("/api/strategy/{target}")
 def get_strategy_content(target: str):
-    """Busca y devuelve el JSON de la estrategia ofensiva para el objetivo."""
     target_clean = target.replace(".", "_")
     
     posibles_rutas = [
@@ -216,7 +185,6 @@ def get_strategy_content(target: str):
                 return json.load(f)
                 
     raise HTTPException(status_code=404, detail=f"Estrategia no encontrada para {target}")
-
 
 @app.get("/api/topology/{target}")
 def get_topology(target: str, db: Session = Depends(get_db)):
@@ -282,16 +250,9 @@ def get_topology(target: str, db: Session = Depends(get_db)):
 
     return {"nodes": nodes, "edges": edges}
 
-
 @app.post("/api/nmap")
 def execute_nmap(req: ScanRequest):
-    try:
-        ipaddress.ip_address(req.target)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Formato de IP inválido para orquestación.")
-
     nmap_command = ["nmap", "-sV", "-O", "-oX", "-"]
-
     
     if req.stealth > 7:
         nmap_command.append("-T0")
@@ -299,15 +260,13 @@ def execute_nmap(req: ScanRequest):
         nmap_command.append("-T2")
     else:
         nmap_command.append("-T3")
-
-    
+        
     if req.ports < 65535:
         nmap_command.extend(["--top-ports", str(req.ports)])
     else:
         nmap_command.append("-p-")
-
-    
-    nmap_command.append(req.target)
+        
+    nmap_command.append(str(req.target))
 
     try:
         result = subprocess.run(nmap_command, capture_output=True, text=True, check=True)
@@ -328,7 +287,7 @@ def execute_nmap(req: ScanRequest):
                         })
                         
         return {
-            "target": req.target,
+            "target": str(req.target),
             "stealth_applied": req.stealth,
             "status": "success",
             "findings": puertos_encontrados
@@ -338,16 +297,11 @@ def execute_nmap(req: ScanRequest):
         raise HTTPException(status_code=500, detail=f"Fallo en ejecución de Nmap: {e.stderr}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-    
 
-
-#Ahora para generar la busqueda de CVE's
 @app.get("/api/cve/{service_banner}")
 def search_cves(service_banner: str):
     try:
-        print(f"🔍 [CVE] Buscando vulnerabilidades para: {service_banner}")
         url = f"https://services.nvd.nist.gov/rest/json/cves/2.0?keywordSearch={service_banner}&resultsPerPage=5"
-        
         
         response = requests.get(url, timeout=15)
         
@@ -361,10 +315,8 @@ def search_cves(service_banner: str):
             cve_info = item.get("cve", {})
             cve_id = cve_info.get("id", "Desconocido")
             
-            
             desc_list = cve_info.get("descriptions", [])
             descripcion = desc_list[0].get("value", "Sin descripción") if desc_list else "Sin descripción"
-            
             
             metrics = cve_info.get("metrics", {})
             score = "N/A"
@@ -392,7 +344,6 @@ def search_cves(service_banner: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
     
-
 @app.post("/api/strategy/live")
 def generate_live_strategy(req: LiveStrategyRequest):
     try:
@@ -402,17 +353,14 @@ def generate_live_strategy(req: LiveStrategyRequest):
             for f in req.findings
         ]
         
-    
         estrategia_json = generate_attack_path(hallazgos_texto, ruido_calculado)
         return estrategia_json
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     
-
 @app.post("/api/persistence/sync")
 def sync_persistence(data: dict, db: Session = Depends(get_db)): 
-    """Recibe datos de escaneo y los guarda en la Bóveda para su posterior consulta."""
     try:
         new_scan = models.AuditScan(
             target=data.get("target"),
@@ -429,11 +377,8 @@ def sync_persistence(data: dict, db: Session = Depends(get_db)):
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @app.get("/api/persistence/latest")
 def get_latest_audit(target: str = None, db: Session = Depends(get_db)):
-    """Recupera el escaneo más reciente de la Bóveda."""
-    
     query = db.query(models.AuditScan)
     
     if target:
@@ -452,35 +397,27 @@ def get_latest_audit(target: str = None, db: Session = Depends(get_db)):
         "strategy": latest_scan.attack_roadmap
     }
     
-
 @app.get("/api/delta/{target}")
 def calculate_delta_registry(target: str, db: Session = Depends(get_db)):
-    """Calcula el delta táctico entre el último escaneo y el anterior para un objetivo específico."""
     scans = db.query(models.AuditScan).filter(models.AuditScan.target == target).order_by(models.AuditScan.created_at.desc()).limit(2).all()
-    
     
     if len(scans) < 2:
         return {"status": "insufficient_data", "message": "No hay suficientes escaneos para calcular delta."}
     
-    
     latest_findings = scans[0].findings if isinstance(scans[0].findings, list) else []
     previous_findings = scans[1].findings if isinstance(scans[1].findings, list) else []
-    
     
     dict_latest = {item.get("port"): item for item in latest_findings if isinstance(item, dict) and "port" in item}
     dict_previous = {item.get("port"): item for item in previous_findings if isinstance(item, dict) and "port" in item}
     
-
     latest_ports = set(dict_latest.keys())
     previous_ports = set(dict_previous.keys())
-    
     
     added_ports = latest_ports - previous_ports
     removed_ports = previous_ports - latest_ports
     
     added_list = [dict_latest[p] for p in added_ports]
     removed_list = [dict_previous[p] for p in removed_ports]
-    
     
     return {
         "status": "success",
