@@ -1,10 +1,9 @@
 version: '3.8'
 
 services:
-  postgres_db:
+  db:
     image: postgres:16-alpine
-    container_name: optiveil_postgres
-    restart: always
+    container_name: optiveil_db
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -12,7 +11,39 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - optiveil_pgdata:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - optiveil_network
+
+  backend:
+    build: 
+      context: ./src
+    container_name: optiveil_backend
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+    networks:
+      - optiveil_network
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: optiveil_frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - optiveil_network
 
 volumes:
-  optiveil_pgdata:
+  postgres_data:
+
+networks:
+  optiveil_network:
+    driver: bridge
