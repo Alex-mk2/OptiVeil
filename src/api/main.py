@@ -1,7 +1,5 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from .database import engine
-from . import models
 from src.api.routers import strategy, scanner, reports, intelligence, persistence
 
 
@@ -24,7 +22,8 @@ app.add_middleware(
 )
 
 
-models.Base.metadata.create_all(bind=engine)
+# El esquema lo gestiona Alembic (migrations/). Ejecuta `alembic upgrade head`
+# antes de arrancar. No usamos create_all para evitar drift con las migraciones.
 app.include_router(strategy.router)
 app.include_router(scanner.router)
 app.include_router(reports.router)

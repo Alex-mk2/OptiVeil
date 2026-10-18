@@ -1,47 +1,129 @@
-from fastapi import APIRouter, HTTPException, Depends
+import logging
+import uuid
+from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks
 from sqlalchemy.orm import Session
 from datetime import datetime
 import subprocess
 import xml.etree.ElementTree as ET
 from src.api.schemas import ScanRequest
 from src.core.engine import OptiVeilEngine
-from src.api.database import get_db
+from src.api.database import get_db, SessionLocal
 from src.api import models
 
+
+logger = logging.getLogger("optiveil.scanner")
 
 router = APIRouter(prefix="/api", tags=["Scanner & Topology"])
 
 
-@router.post("/scan")
-async def start_scan(request: ScanRequest, db: Session = Depends(get_db)):
-    """ Inicia un escaneo utilizando OptiVeilEngine con los parámetros proporcionados y almacena los resultados en la base de datos. """
+def parse_nmap_xml(xml_output: str) -> list[dict]:
+    """Extrae los puertos abiertos de la salida XML de Nmap.
+
+    Función pura (sin red ni subprocess) para poder testearla con fixtures.
+    Lanza ET.ParseError si el XML es inválido.
+    """
+    root = ET.fromstring(xml_output)
+    puertos_encontrados = []
+    for host in root.findall('host'):
+        for port in host.findall('.//port'):
+            state = port.find('state')
+            if state is None or state.get('state') != 'open':
+                continue
+            service = port.find('service')
+            if service is None:
+                continue
+            banner = f"{service.get('product', '')} {service.get('version', '')}".strip()
+            puertos_encontrados.append({
+                "port": int(port.get('portid')),
+                "service": service.get('name', 'unknown').upper(),
+                "banner": banner if banner else "BANNER OCULTO",
+            })
+    return puertos_encontrados
+
+
+def _run_scan_job(job_id: str, target: str, stealth: int, ports: int):
+    """Ejecuta el motor en un worker síncrono (threadpool de Starlette), con su
+    propia sesión de BD, y persiste el estado del job. No bloquea el event loop."""
+    db = SessionLocal()
     try:
-        engine = OptiVeilEngine(target=str(request.target), stealth=request.stealth, ports_count=request.ports)
+        job = db.query(models.ScanJob).filter(models.ScanJob.id == job_id).first()
+        if job is None:
+            logger.error("Job %s desapareció antes de iniciar", job_id)
+            return
+        job.status = "running"
+        db.commit()
+
+        engine = OptiVeilEngine(target=target, stealth=stealth, ports_count=ports)
         result = engine.execute()
-        
+
         scan = models.AuditScan(
-            target=str(request.target),
-            stealth_level=request.stealth,
-            best_config=result["best_config"],
-            findings=result["findings"],
+            target=target,
+            stealth_level=stealth,
+            best_config=result.get("best_config"),
+            findings=result.get("findings"),
             attack_roadmap=result.get("attack_roadmap"),
-            scan_hash=f"{str(request.target)}-{datetime.utcnow().timestamp()}"
+            scan_hash=f"{target}-{datetime.utcnow().timestamp()}",
         )
         db.add(scan)
-        db.commit()
-        db.refresh(scan)
 
-        return {
-            "best_config": result["best_config"],
-            "findings": result["findings"],
-            "pareto_front": result["pareto_front"],
-            "status": result["status"],
+        job.status = "done"
+        job.result = {
+            "best_config": result.get("best_config"),
+            "findings": result.get("findings"),
+            "pareto_front": result.get("pareto_front"),
+            "scan_status": result.get("status"),  # estado del motor (success/no_ports_found)
             "attack_roadmap": result.get("attack_roadmap"),
+            "scan_stats": result.get("scan_stats"),
         }
+        db.commit()
     except Exception as e:
-        print(f"CRITICAL ERROR EN API: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
-    
+        logger.exception("Fallo en el job de escaneo %s", job_id)
+        db.rollback()
+        job = db.query(models.ScanJob).filter(models.ScanJob.id == job_id).first()
+        if job is not None:
+            job.status = "error"
+            job.error = str(e)
+            db.commit()
+    finally:
+        db.close()
+
+
+@router.post("/scan", status_code=202)
+def start_scan(request: ScanRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+    """Encola un escaneo en background y devuelve un job_id para consultar su estado.
+    El trabajo pesado (NSGA-II, Scapy, IA) corre fuera del event loop."""
+    job_id = uuid.uuid4().hex
+    job = models.ScanJob(
+        id=job_id,
+        target=str(request.target),
+        stealth_level=request.stealth,
+        ports=request.ports,
+        status="pending",
+    )
+    db.add(job)
+    db.commit()
+
+    background_tasks.add_task(
+        _run_scan_job, job_id, str(request.target), request.stealth, request.ports
+    )
+    return {"job_id": job_id, "status": "pending"}
+
+
+@router.get("/scan/{job_id}")
+def get_scan_status(job_id: str, db: Session = Depends(get_db)):
+    """Devuelve el estado del job y, si terminó, su resultado completo."""
+    job = db.query(models.ScanJob).filter(models.ScanJob.id == job_id).first()
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job no encontrado")
+
+    payload = {"job_id": job.id}
+    if job.status == "done":
+        payload.update(job.result or {})
+    elif job.status == "error":
+        payload["error"] = job.error
+    payload["status"] = job.status  # el estado del job siempre manda sobre el payload
+    return payload
+
 
 @router.get("/topology/{target}")
 def get_topology(target: str, db: Session = Depends(get_db)):
@@ -133,23 +215,12 @@ def execute_nmap(req: ScanRequest):
 
 
     try:
-        result = subprocess.run(nmap_command, capture_output=True, text=True, check=True)
-        
-        root = ET.fromstring(result.stdout)
-        puertos_encontrados = []
-        
-        for host in root.findall('host'):
-            for port in host.findall('.//port'):
-                if port.find('state').get('state') == 'open':
-                    service = port.find('service')
-                    if service is not None:
-                        banner = f"{service.get('product', '')} {service.get('version', '')}".strip()
-                        puertos_encontrados.append({
-                            "port": int(port.get('portid')),
-                            "service": service.get('name', 'unknown').upper(), 
-                            "banner": banner if banner else "BANNER OCULTO"
-                        })
-                        
+        result = subprocess.run(
+            nmap_command, capture_output=True, text=True, check=True, timeout=300
+        )
+
+        puertos_encontrados = parse_nmap_xml(result.stdout)
+
         return {
             "target": str(req.target),
             "stealth_applied": req.stealth,
@@ -157,7 +228,13 @@ def execute_nmap(req: ScanRequest):
             "findings": puertos_encontrados
         }
 
+    except subprocess.TimeoutExpired:
+        raise HTTPException(status_code=504, detail="Timeout: Nmap excedió el tiempo límite (300s).")
+    except FileNotFoundError:
+        raise HTTPException(status_code=500, detail="Nmap no está instalado o no está en el PATH.")
     except subprocess.CalledProcessError as e:
         raise HTTPException(status_code=500, detail=f"Fallo en ejecución de Nmap: {e.stderr}")
+    except ET.ParseError:
+        raise HTTPException(status_code=500, detail="Salida de Nmap no es XML válido.")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

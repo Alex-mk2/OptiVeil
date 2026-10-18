@@ -14,12 +14,18 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 
-WORKDIR /app/src
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-
-COPY . .
-ENV PYTHONPATH=/app
+# El build context es la raíz del repo (ver docker-compose.yml) para poder
+# incluir alembic.ini y migrations/, que viven fuera de src/.
 WORKDIR /app
-CMD ["uvicorn", "src.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+COPY src/requirements.txt src/requirements.txt
+RUN pip install --no-cache-dir -r src/requirements.txt
+
+
+COPY src/ src/
+COPY alembic.ini alembic.ini
+COPY migrations/ migrations/
+ENV PYTHONPATH=/app
+
+
+# Aplica migraciones (Alembic es la fuente de verdad del esquema) y arranca la API.
+CMD ["sh", "-c", "alembic upgrade head && uvicorn src.api.main:app --host 0.0.0.0 --port 8000"]

@@ -12,18 +12,32 @@ const api = axios.create({
 });
 
 
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
 export const auditService = {
-    startScan: async (target, stealth, ports) => {
+    // Encola el escaneo (202) y hace polling del job hasta que termina.
+    startScan: async (target, stealth, ports, { pollIntervalMs = 2000, timeoutMs = 600000 } = {}) => {
         try {
-            const response = await api.post('/api/scan', { 
-                target, 
-                stealth: parseInt(stealth), 
-                ports: parseInt(ports) 
+            const { data } = await api.post('/api/scan', {
+                target,
+                stealth: parseInt(stealth),
+                ports: parseInt(ports)
             });
-            return response.data;
+            const jobId = data.job_id;
+            const deadline = Date.now() + timeoutMs;
+
+            while (Date.now() < deadline) {
+                await sleep(pollIntervalMs);
+                const { data: job } = await api.get(`/api/scan/${jobId}`);
+                if (job.status === 'done') return job;
+                if (job.status === 'error') {
+                    throw job.error || 'El motor de auditoría reportó un error';
+                }
+            }
+            throw 'Tiempo de espera agotado esperando al motor de auditoría';
         } catch (error) {
             console.error("Falla en la comunicación con el motor NSGA-II:", error);
-            throw error.response?.data?.detail || "Error en el motor de auditoría";
+            throw error.response?.data?.detail || error || "Error en el motor de auditoría";
         }
     },
 

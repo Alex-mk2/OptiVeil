@@ -1,3 +1,5 @@
+from functools import lru_cache
+
 import numpy as np
 from pymoo.core.problem import ElementwiseProblem
 from pymoo.algorithms.moo.nsga2 import NSGA2
@@ -30,7 +32,15 @@ class OptiVeilSthealthProblem(ElementwiseProblem):
         
         out["F"] = [ruido, tiempo_ejecucion]
 
+@lru_cache(maxsize=32)
 def run_nsga_ii(target_ports: int = 1000):
+    """Ejecuta NSGA-II para un número de puertos dado.
+
+    El Frente de Pareto solo depende de `target_ports`, así que se cachea:
+    escaneos repetidos con el mismo recuento reutilizan la optimización en vez
+    de recalcular 100 generaciones. Los arrays devueltos son de solo lectura
+    para los llamadores (no se mutan aguas abajo).
+    """
     problem = OptiVeilSthealthProblem(target_ports)
     
     algorithm = NSGA2(

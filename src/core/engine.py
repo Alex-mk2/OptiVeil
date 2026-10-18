@@ -1,3 +1,4 @@
+import concurrent.futures
 import json
 import os
 import sys
@@ -36,22 +37,34 @@ class OptiVeilEngine:
         notify(f"Escaneando {self.target} (Bajo el radar)...")
         with StealthScanner(target_ip=self.target, config=best_config) as scanner:
             puertos_abiertos = scanner.run(ports_to_scan=list(range(1, self.ports_count + 1)))
+            scan_stats = scanner.scan_stats
 
         if not puertos_abiertos:
             return {
-                "status": "no_ports_found", 
+                "status": "no_ports_found",
                 "best_config": best_config,
-                "pareto_front": pareto_front
+                "pareto_front": pareto_front,
+                "scan_stats": scan_stats
             }
 
         notify("Identificando servicios y sistemas operativos...")
-        hallazgos_detallados = []
         identificador = ServiceIdentifier(timeout=2)
-        
-        for puerto_num, os_guess in puertos_abiertos:
+
+        def _identify(entry):
+            puerto_num, os_guess = entry
             info = identificador.identify(self.target, puerto_num)
             info["os_guess"] = os_guess
-            hallazgos_detallados.append(info)
+            return info
+
+        # Fingerprinting en paralelo: cada identify() puede esperar hasta el
+        # timeout del socket; en secuencial esas esperas se acumulan.
+        max_workers = min(16, len(puertos_abiertos)) or 1
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as pool:
+            hallazgos_detallados = list(pool.map(_identify, puertos_abiertos))
+
+        # Orden estable por puerto (map preserva orden de entrada, pero
+        # los puertos abiertos ya vienen ordenados; lo garantizamos).
+        hallazgos_detallados.sort(key=lambda h: h.get("port", 0))
 
         notify("Generando evidencias y contramedidas YARA...")
         ruta_reporte = save_audit_report(
@@ -95,6 +108,7 @@ class OptiVeilEngine:
             "findings": hallazgos_detallados,
             "attack_roadmap": ruta_ataque,
             "pareto_front": pareto_front,
+            "scan_stats": scan_stats,
             "files": {
                 "json": ruta_reporte,
                 "yara": ruta_reglas,
