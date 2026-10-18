@@ -131,6 +131,30 @@ def _fallback(phase: str, action: str, risk: str, justification: str) -> dict:
                        "risk": risk, "justification": justification}]}
 
 
+def _roadmap_from_llm(llm, messages) -> dict:
+    """Obtiene la hoja de ruta del LLM priorizando salida estructurada.
+
+    1) Intenta `with_structured_output(AttackRoadmap)`: el modelo devuelve el
+       objeto ya validado (vía function-calling/JSON-mode), eliminando el
+       parseo frágil.
+    2) Si el proveedor no lo soporta (o falla), cae al invoke crudo + extracción
+       tolerante de JSON.
+    """
+    try:
+        structured = llm.with_structured_output(AttackRoadmap)
+        result = structured.invoke(messages)
+        if isinstance(result, AttackRoadmap):
+            return result.model_dump()
+        return AttackRoadmap.model_validate(result).model_dump()
+    except (ValueError, json.JSONDecodeError, ValidationError):
+        raise
+    except Exception as e:
+        logger.info("structured_output no disponible/falló (%s); uso parseo manual", e)
+
+    respuesta = llm.invoke(messages)
+    return parse_roadmap(respuesta.content)
+
+
 def generate_attack_path(hallazgos: list, noise_score: float, cve_fetcher=fetch_cves):
     """Genera una hoja de ruta purple-team fundamentada en CVEs reales.
 
@@ -177,23 +201,17 @@ def generate_attack_path(hallazgos: list, noise_score: float, cve_fetcher=fetch_
     }}
     """
 
+    messages = [SystemMessage(content=prompt_estratega), HumanMessage(content=query)]
     try:
-        respuesta = llm.invoke([
-            SystemMessage(content=prompt_estratega),
-            HumanMessage(content=query),
-        ])
+        roadmap = _roadmap_from_llm(llm, messages)
+    except (ValueError, json.JSONDecodeError, ValidationError) as e:
+        logger.error("La IA no devolvió una hoja de ruta válida: %s", e)
+        return _fallback("Error de Parseo", "Revisar logs del backend", "alto",
+                         "La IA no devolvió una hoja de ruta JSON válida.")
     except Exception as e:
         logger.exception("Fallo en la inferencia de IA ofensiva")
         return _fallback("Error de Conexión IA", "Fallo en LLM", "medio",
                          f"Error detectado: {str(e)[:80]}")
-
-    try:
-        roadmap = parse_roadmap(respuesta.content)
-    except (ValueError, json.JSONDecodeError, ValidationError) as e:
-        logger.error("La IA no devolvió un JSON válido: %s | contenido: %s",
-                     e, (respuesta.content or "")[:300])
-        return _fallback("Error de Parseo", "Revisar logs del backend", "alto",
-                         "La IA no devolvió una hoja de ruta JSON válida.")
 
     # Adjunta el ranking de hallazgos para trazabilidad en el reporte/frontend.
     roadmap["prioritized_findings"] = [

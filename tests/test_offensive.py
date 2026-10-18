@@ -81,11 +81,32 @@ class _FakeMsg:
 
 
 class _FakeLLM:
+    """LLM falso sin structured output: fuerza el camino de parseo manual."""
     def __init__(self, content):
         self._content = content
 
     def invoke(self, _messages):
         return _FakeMsg(self._content)
+
+
+class _StructuredRunnable:
+    def __init__(self, obj):
+        self._obj = obj
+
+    def invoke(self, _messages):
+        return self._obj
+
+
+class _FakeStructuredLLM:
+    """LLM falso que SÍ soporta with_structured_output (devuelve el modelo)."""
+    def __init__(self, obj):
+        self._obj = obj
+
+    def with_structured_output(self, _schema):
+        return _StructuredRunnable(self._obj)
+
+    def invoke(self, _messages):  # no debería llamarse en el camino estructurado
+        raise AssertionError("no debería usar invoke crudo cuando hay structured output")
 
 
 # cve_fetcher falso para no tocar red en los tests.
@@ -102,6 +123,20 @@ def test_generate_attack_path_exito(monkeypatch):
     assert out["steps"][0]["risk"] == "medio"
     assert out["steps"][0]["mitre_technique"] == "T1046"
     assert "prioritized_findings" in out
+
+
+def test_generate_attack_path_structured_output(monkeypatch):
+    from src.api.schemas import AttackRoadmap
+    rm = AttackRoadmap.model_validate({"steps": [
+        {"id": 1, "phase": "Explotación", "action": "exploit", "risk": "high",
+         "justification": "cve", "mitre_technique": "T1190", "cve_refs": ["CVE-2021-1"]}
+    ]})
+    monkeypatch.setattr(IA_offensive, "build_llm", lambda **kw: _FakeStructuredLLM(rm))
+    out = generate_attack_path([{"port": 80, "service": "http", "banner": "nginx"}],
+                               noise_score=2.0, cve_fetcher=_NO_CVES)
+    assert out["steps"][0]["mitre_technique"] == "T1190"
+    assert out["steps"][0]["cve_refs"] == ["CVE-2021-1"]
+    assert out["steps"][0]["risk"] == "alto"
 
 
 def test_generate_attack_path_json_malo_devuelve_fallback(monkeypatch):
