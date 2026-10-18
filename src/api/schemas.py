@@ -22,11 +22,25 @@ class AttackStep(BaseModel):
     action: str
     risk: str = "medio"
     justification: str = ""
+    # Campos purple-team (opcionales; el frontend ignora los que no use).
+    mitre_technique: str = ""        # ID ATT&CK, p. ej. "T1190"
+    cve_refs: List[str] = Field(default_factory=list)
+    detection: str = ""              # cómo lo detectaría un blue team
+    mitigation: str = ""             # contramedida defensiva
 
     @field_validator("risk", mode="before")
     @classmethod
     def _normalize_risk(cls, v):
         return normalize_risk(v)
+
+    @field_validator("cve_refs", mode="before")
+    @classmethod
+    def _coerce_cve_refs(cls, v):
+        if v is None:
+            return []
+        if isinstance(v, str):
+            return [v] if v.strip() else []
+        return list(v)
 
 
 class AttackRoadmap(BaseModel):

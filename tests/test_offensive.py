@@ -88,17 +88,25 @@ class _FakeLLM:
         return _FakeMsg(self._content)
 
 
+# cve_fetcher falso para no tocar red en los tests.
+_NO_CVES = lambda *a, **k: []
+
+
 def test_generate_attack_path_exito(monkeypatch):
-    content = '{"steps":[{"id":1,"phase":"Recon","action":"enum","risk":"medium","justification":"base"}]}'
+    content = ('{"steps":[{"id":1,"phase":"Recon","action":"enum","risk":"medium",'
+               '"justification":"base","mitre_technique":"T1046"}]}')
     monkeypatch.setattr(IA_offensive, "build_llm", lambda **kw: _FakeLLM(content))
-    out = generate_attack_path(["Puerto 22 (ssh)"], noise_score=3.0)
+    out = generate_attack_path([{"port": 22, "service": "ssh", "banner": "OpenSSH"}],
+                               noise_score=3.0, cve_fetcher=_NO_CVES)
     assert out["steps"][0]["phase"] == "Recon"
     assert out["steps"][0]["risk"] == "medio"
+    assert out["steps"][0]["mitre_technique"] == "T1046"
+    assert "prioritized_findings" in out
 
 
 def test_generate_attack_path_json_malo_devuelve_fallback(monkeypatch):
     monkeypatch.setattr(IA_offensive, "build_llm", lambda **kw: _FakeLLM("lo siento, no puedo"))
-    out = generate_attack_path([], noise_score=5.0)
+    out = generate_attack_path([], noise_score=5.0, cve_fetcher=_NO_CVES)
     assert out["steps"][0]["phase"] == "Error de Parseo"
 
 
@@ -109,7 +117,7 @@ def test_generate_attack_path_sin_token_devuelve_fallback(monkeypatch):
         raise LLMConfigError("sin token")
 
     monkeypatch.setattr(IA_offensive, "build_llm", _raise)
-    out = generate_attack_path([], noise_score=5.0)
+    out = generate_attack_path([], noise_score=5.0, cve_fetcher=_NO_CVES)
     assert "Configuración" in out["steps"][0]["phase"]
 
 
