@@ -1,6 +1,36 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from pydantic.networks import IPvAnyAddress
 from typing import List
+
+
+# Mapea las variantes de riesgo que puede devolver la IA a un valor canónico
+# (el frontend compara contra alto/medio/bajo y high/medium/low).
+_RISK_MAP = {
+    "alto": "alto", "high": "alto", "critical": "alto", "critico": "alto", "crítico": "alto",
+    "medio": "medio", "medium": "medio", "moderate": "medio", "moderado": "medio",
+    "bajo": "bajo", "low": "bajo", "info": "bajo", "informational": "bajo",
+}
+
+
+def normalize_risk(value) -> str:
+    return _RISK_MAP.get(str(value).strip().lower(), "medio")
+
+
+class AttackStep(BaseModel):
+    id: int
+    phase: str
+    action: str
+    risk: str = "medio"
+    justification: str = ""
+
+    @field_validator("risk", mode="before")
+    @classmethod
+    def _normalize_risk(cls, v):
+        return normalize_risk(v)
+
+
+class AttackRoadmap(BaseModel):
+    steps: List[AttackStep] = Field(default_factory=list)
 
 
 

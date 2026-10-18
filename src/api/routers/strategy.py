@@ -7,22 +7,28 @@ from src.api.schemas import LiveStrategyRequest
 
 router = APIRouter(prefix="/api", tags=["Attack Strategies"])
 
+STRATEGY_DIR = "results/attack_reports"
+
+
+def _safe_strategy_path(target: str) -> str:
+    """Resuelve la ruta del archivo de estrategia validando que quede dentro
+    de STRATEGY_DIR (evita path-traversal con `..`, `/` o rutas absolutas)."""
+    base = os.path.abspath(STRATEGY_DIR)
+    target_clean = target.replace(".", "_")
+    file_path = os.path.abspath(os.path.join(base, f"strategy_{target_clean}.json"))
+    if os.path.commonpath([base, file_path]) != base:
+        raise HTTPException(status_code=400, detail="Objetivo inválido")
+    return file_path
+
 
 @router.get("/strategy/{target}")
 def get_strategy_content(target: str):
-    """ Devuelve el contenido de la estrategia de ataque generada para un objetivo específico. Busca en la carpeta results/attack_reports por archivos JSON que contengan el nombre del objetivo. Si encuentra una coincidencia, devuelve su contenido; de lo contrario, indica que no se encontró la estrategia. """
-    
-    target_clean = target.replace(".", "_")
-    posibles_rutas = [
-        os.path.join("results/attack_reports", f"strategy_{target_clean}.json")
-    ]
-    
-    
-    for file_path in posibles_rutas:
-        if os.path.exists(file_path):
-            with open(file_path, "r", encoding="utf-8") as f:
-                return json.load(f)
-                
+    """ Devuelve el contenido de la estrategia de ataque generada para un objetivo específico. Busca en results/attack_reports el archivo JSON del objetivo (validando la ruta contra path-traversal). Si existe, devuelve su contenido; si no, 404. """
+    file_path = _safe_strategy_path(target)
+    if os.path.exists(file_path):
+        with open(file_path, "r", encoding="utf-8") as f:
+            return json.load(f)
+
     raise HTTPException(status_code=404, detail=f"Estrategia no encontrada para {target}")
 
 
