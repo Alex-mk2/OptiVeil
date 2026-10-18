@@ -6,7 +6,7 @@ import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from modules.stealth.nsga_II import run_nsga_ii, select_best_configuration
 from modules.stealth.scanner import StealthScanner
-from utils.generate_report import save_audit_report
+from utils.generate_report import save_audit_report, render_roadmap_markdown
 from inter.fingerprint import ServiceIdentifier
 from inter.response import RuleGenerator
 from inter.IA_analyzer import analyze_audit
@@ -100,7 +100,13 @@ class OptiVeilEngine:
         if ruta_ataque:
             with open(ruta_json_estrategia, "w", encoding="utf-8") as f:
                 json.dump(ruta_ataque, f, indent=4)
-        
+
+            # Anexa la ruta de ataque al reporte ejecutivo (un solo artefacto).
+            seccion = render_roadmap_markdown(ruta_ataque)
+            if seccion:
+                with open(ruta_md, "a", encoding="utf-8") as f:
+                    f.write("\n\n" + seccion)
+
         return {
             "status": "success",
             "target": self.target,

@@ -1,0 +1,7 @@
+# Scope de OptiVeil: objetivos AUTORIZADOS (uno por línea).
+# Admite IP exacta, red CIDR o hostname. Las líneas con # se ignoran.
+# Si este archivo (o OPTIVEIL_SCOPE) no existe, no se restringe el alcance.
+# Ejemplos:
+# 192.168.1.0/24
+# 10.0.0.5
+# scanme.nmap.org

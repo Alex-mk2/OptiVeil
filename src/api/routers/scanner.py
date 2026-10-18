@@ -9,6 +9,7 @@ from src.api.schemas import ScanRequest
 from src.core.engine import OptiVeilEngine
 from src.api.database import get_db, SessionLocal
 from src.api import models
+from src.core.scope import enforce_scope
 
 
 logger = logging.getLogger("optiveil.scanner")
@@ -92,6 +93,7 @@ def _run_scan_job(job_id: str, target: str, stealth: int, ports: int):
 def start_scan(request: ScanRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     """Encola un escaneo en background y devuelve un job_id para consultar su estado.
     El trabajo pesado (NSGA-II, Scapy, IA) corre fuera del event loop."""
+    enforce_scope("scan", str(request.target))
     job_id = uuid.uuid4().hex
     job = models.ScanJob(
         id=job_id,
