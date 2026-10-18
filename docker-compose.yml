@@ -33,6 +33,12 @@ services:
       - .env
     environment:
       - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+    # Scapy necesita sockets raw para construir/enviar paquetes SYN y esnifar
+    # respuestas. NET_RAW habilita los raw sockets; NET_ADMIN, operaciones de
+    # interfaz. Es el mínimo necesario (más acotado que privileged: true).
+    cap_add:
+      - NET_RAW
+      - NET_ADMIN
     networks:
       - optiveil_network
 
