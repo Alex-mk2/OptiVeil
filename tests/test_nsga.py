@@ -5,6 +5,7 @@ import pytest
 from modules.stealth.nsga_II import (
     select_best_configuration,
     OptiVeilSthealthProblem,
+    run_nsga_ii,
 )
 
 
@@ -83,3 +84,11 @@ def test_mas_espera_reduce_ruido():
     ruido_rapido, _ = _evaluate([500.0, 200.0, 10.0])
     ruido_lento, _ = _evaluate([2000.0, 200.0, 10.0])
     assert ruido_lento < ruido_rapido
+
+
+def test_run_nsga_ii_cachea_por_puertos():
+    """El mismo recuento de puertos reutiliza el resultado cacheado (identidad)."""
+    X1, F1 = run_nsga_ii(target_ports=50)
+    X2, F2 = run_nsga_ii(target_ports=50)
+    assert X1 is X2 and F1 is F2  # cache hit: mismo objeto
+    assert F1.shape[1] == 2       # 2 objetivos: ruido y tiempo
