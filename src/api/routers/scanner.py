@@ -71,8 +71,9 @@ def _run_scan_job(job_id: str, target: str, stealth: int, ports: int):
             "best_config": result.get("best_config"),
             "findings": result.get("findings"),
             "pareto_front": result.get("pareto_front"),
-            "status": result.get("status"),
+            "scan_status": result.get("status"),  # estado del motor (success/no_ports_found)
             "attack_roadmap": result.get("attack_roadmap"),
+            "scan_stats": result.get("scan_stats"),
         }
         db.commit()
     except Exception as e:
@@ -115,11 +116,12 @@ def get_scan_status(job_id: str, db: Session = Depends(get_db)):
     if job is None:
         raise HTTPException(status_code=404, detail="Job no encontrado")
 
-    payload = {"job_id": job.id, "status": job.status}
+    payload = {"job_id": job.id}
     if job.status == "done":
         payload.update(job.result or {})
     elif job.status == "error":
         payload["error"] = job.error
+    payload["status"] = job.status  # el estado del job siempre manda sobre el payload
     return payload
 
 

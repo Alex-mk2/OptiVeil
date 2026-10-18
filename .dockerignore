@@ -1,0 +1,21 @@
+.git
+.github
+.vscode
+.claude
+__pycache__
+*.pyc
+.pytest_cache
+
+# Frontend (tiene su propio build context)
+frontend/node_modules
+frontend/dist
+
+# Datos y salidas locales
+data
+results
+
+# Entornos y secretos locales
+.venv
+venv
+*.env
+!.env.example

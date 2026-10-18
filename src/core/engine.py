@@ -37,12 +37,14 @@ class OptiVeilEngine:
         notify(f"Escaneando {self.target} (Bajo el radar)...")
         with StealthScanner(target_ip=self.target, config=best_config) as scanner:
             puertos_abiertos = scanner.run(ports_to_scan=list(range(1, self.ports_count + 1)))
+            scan_stats = scanner.scan_stats
 
         if not puertos_abiertos:
             return {
-                "status": "no_ports_found", 
+                "status": "no_ports_found",
                 "best_config": best_config,
-                "pareto_front": pareto_front
+                "pareto_front": pareto_front,
+                "scan_stats": scan_stats
             }
 
         notify("Identificando servicios y sistemas operativos...")
@@ -106,6 +108,7 @@ class OptiVeilEngine:
             "findings": hallazgos_detallados,
             "attack_roadmap": ruta_ataque,
             "pareto_front": pareto_front,
+            "scan_stats": scan_stats,
             "files": {
                 "json": ruta_reporte,
                 "yara": ruta_reglas,
