@@ -1,10 +1,7 @@
-import os
 import json
 import re
-from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, SystemMessage
-from dotenv import load_dotenv
-load_dotenv()
+from .llm_config import build_llm, LLMConfigError, DEFAULT_OFFENSIVE_MODEL
 
 
 def generate_attack_path(hallazgos: list, noise_score: float):
@@ -20,12 +17,15 @@ def generate_attack_path(hallazgos: list, noise_score: float):
        - Si el ruido es alto (priorizamos f2), sugiere tácticas rápidas y agresivas.
     """
 
-    llm = ChatOpenAI(
-        model_name="gpt-5-mini",
-        openai_api_key=os.getenv("GITHUB_TOKEN"),
-        temperature=0.2,
-        base_url="https://models.inference.ai.azure.com"
-    )
+    try:
+        llm = build_llm(model=DEFAULT_OFFENSIVE_MODEL, temperature=0.2)
+    except LLMConfigError as e:
+        return {
+            "steps": [
+                {"id": 1, "phase": "Error de Configuración IA", "action": "Configurar token de IA",
+                 "risk": "medio", "justification": str(e)}
+            ]
+        }
 
     query = f"""
     Hallazgos detectados: {hallazgos}

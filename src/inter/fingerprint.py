@@ -49,7 +49,8 @@ class ServiceIdentifier:
             result["service"] = self.common_ports[port]
             if not result["banner"]:
                 result["banner"] = "N/A (Inferred by standard port)"
-                
+
+        result["risk"] = self._calculate_risk(result["service"], result.get("banner"))
         return result
 
     def _analyze_banner(self, banner_bytes: bytes, port: int) -> dict:

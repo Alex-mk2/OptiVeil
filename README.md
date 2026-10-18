@@ -52,7 +52,7 @@ Antes de comenzar, instala y configura lo siguiente:
 2. **[Python 3.11+](https://www.python.org/downloads/)**
 3. **[Npcap](https://npcap.com/#download)** *(solo Windows)* — Requerido por Scapy para captura a bajo nivel.
 4. **Permisos de Administrador** *(solo Windows)* — Necesarios para sockets raw.
-5. **API Key de OpenAI** — Si vas a usar el componente de IA.
+5. **Token de IA** — Si vas a usar el componente de IA. Por defecto OptiVeil usa [GitHub Models](https://github.com/marketplace/models) (endpoint de Azure AI Inference) con un token personal.
 
 ---
 
@@ -79,8 +79,12 @@ Crea un archivo `.env` en la raíz del proyecto con las credenciales necesarias:
 
 ```env
 DATABASE_URL=postgresql://postgres:password_seguro@localhost:5432/optiveildb
-OPENAI_API_KEY=sk-TU_LLAVE_AQUI
+# Token de IA (GitHub Models por defecto). Orden de búsqueda:
+# OPTIVEIL_AI_TOKEN -> GITHUB_TOKEN -> OPENAI_API_KEY
+OPTIVEIL_AI_TOKEN=ghp_TU_LLAVE_AQUI
 ```
+
+> El endpoint de IA se puede cambiar con `OPTIVEIL_AI_BASE_URL` (por defecto `https://models.inference.ai.azure.com`).
 
 ### Paso 4: Levantar el backend (FastAPI)
 

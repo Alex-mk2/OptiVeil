@@ -1,32 +1,22 @@
-import os
 import json
-from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, SystemMessage
-from dotenv import load_dotenv
-load_dotenv()
+from .llm_config import build_llm, LLMConfigError, DEFAULT_ANALYST_MODEL
 
 
 def analyze_audit(ruta_json: str):
     """Toma el JSON generado por OptiVeil y usa IA para redactar un reporte táctico."""
     try:
-        with open(ruta_json, 'r') as f:
+        with open(ruta_json, 'r', encoding="utf-8") as f:
             datos_auditoria = json.load(f)
     except Exception as e:
         return f"Error al leer la evidencia: {e}"
 
-    
-    api_key = os.getenv("GITHUB_TOKEN") 
-    if not api_key:
-        return "Error: Token de IA no configurado en el entorno."
+    try:
+        llm = build_llm(model=DEFAULT_ANALYST_MODEL, temperature=0.2)
+    except LLMConfigError as e:
+        return f"Error: {e}"
 
-    llm = ChatOpenAI(
-        model_name="gpt-4o-mini", 
-        openai_api_key=api_key, 
-        temperature=0.2, 
-        base_url="https://models.inference.ai.azure.com" 
-    )
 
-    
     prompt_analista = """
     Eres el Analista Principal de Ciberseguridad (Purple Team) del framework OptiVeil.
     TU OBJETIVO: Analizar el JSON resultante de un escaneo de red sigiloso y redactar un Reporte Ejecutivo.

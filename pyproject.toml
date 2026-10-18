@@ -18,5 +18,16 @@ dependencies = [
     "langchain-openai", # (O el proveedor que prefieras)
 ]
 
+[project.optional-dependencies]
+test = [
+    "pytest",
+    "httpx",   # requerido por fastapi.testclient
+]
+
 [project.scripts]
 optiveil = "src.IA_guard.cli:app"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+filterwarnings = ["ignore::DeprecationWarning"]
