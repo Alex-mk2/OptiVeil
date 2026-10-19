@@ -38,9 +38,11 @@ def get_ai_token() -> str | None:
     return None
 
 
-def build_llm(model: str, temperature: float = 0.2) -> ChatOpenAI:
+def build_llm(model: str, temperature: float = 0.2,
+              max_tokens: int | None = None) -> ChatOpenAI:
     """Crea un cliente ChatOpenAI configurado contra el proveedor de OptiVeil.
 
+    `max_tokens` acota la salida (clave de rendimiento en modelos locales).
     Lanza LLMConfigError si no hay token, para que el llamador pueda degradar
     con un mensaje claro en vez de fallar con un error opaco del SDK.
     """
@@ -56,4 +58,6 @@ def build_llm(model: str, temperature: float = 0.2) -> ChatOpenAI:
     kwargs = {"model_name": model, "openai_api_key": token, "temperature": temperature}
     if base_url:
         kwargs["base_url"] = base_url
+    if max_tokens:
+        kwargs["max_tokens"] = max_tokens
     return ChatOpenAI(**kwargs)

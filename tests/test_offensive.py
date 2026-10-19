@@ -11,6 +11,14 @@ from src.api.main import app
 from src.api.routers import strategy as strategy_router
 
 
+@pytest.fixture(autouse=True)
+def _reset_structured_cache():
+    """Resetea el cache de capacidad de structured output entre tests."""
+    IA_offensive._structured_supported = None
+    yield
+    IA_offensive._structured_supported = None
+
+
 # --- extract_json_block ---
 
 def test_extrae_json_plano():
@@ -123,6 +131,37 @@ def test_generate_attack_path_exito(monkeypatch):
     assert out["steps"][0]["risk"] == "medio"
     assert out["steps"][0]["mitre_technique"] == "T1046"
     assert "prioritized_findings" in out
+
+
+class _CountingLLM:
+    """Cuenta intentos de structured output (que fallan) e invokes crudos."""
+    def __init__(self, content):
+        self._content = content
+        self.structured_calls = 0
+        self.invoke_calls = 0
+
+    def with_structured_output(self, _schema):
+        self.structured_calls += 1
+        raise RuntimeError("structured output no soportado")
+
+    def invoke(self, _messages):
+        self.invoke_calls += 1
+        return _FakeMsg(self._content)
+
+
+def test_structured_output_se_cachea_tras_fallo():
+    content = '{"steps":[{"id":1,"phase":"R","action":"a","risk":"bajo","justification":"j"}]}'
+    llm = _CountingLLM(content)
+
+    IA_offensive._roadmap_from_llm(llm, [])
+    assert IA_offensive._structured_supported is False
+    assert llm.structured_calls == 1
+    assert llm.invoke_calls == 1
+
+    # Segunda petición: ya NO reintenta el camino estructurado (evita doble gen).
+    IA_offensive._roadmap_from_llm(llm, [])
+    assert llm.structured_calls == 1  # sin incremento
+    assert llm.invoke_calls == 2
 
 
 def test_generate_attack_path_structured_output(monkeypatch):

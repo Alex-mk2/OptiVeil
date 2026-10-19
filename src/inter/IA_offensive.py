@@ -131,25 +131,35 @@ def _fallback(phase: str, action: str, risk: str, justification: str) -> dict:
                        "risk": risk, "justification": justification}]}
 
 
+# Capacidad de salida estructurada del proveedor, cacheada por proceso:
+# None = desconocida, True = soportada, False = no soportada (se omite el
+# intento para no pagar una generación extra en cada petición).
+_structured_supported = None
+
+
 def _roadmap_from_llm(llm, messages) -> dict:
     """Obtiene la hoja de ruta del LLM priorizando salida estructurada.
 
-    1) Intenta `with_structured_output(AttackRoadmap)`: el modelo devuelve el
-       objeto ya validado (vía function-calling/JSON-mode), eliminando el
-       parseo frágil.
-    2) Si el proveedor no lo soporta (o falla), cae al invoke crudo + extracción
-       tolerante de JSON.
+    1) Si el proveedor la soporta, `with_structured_output(AttackRoadmap)`
+       devuelve el objeto ya validado en UNA sola generación.
+    2) Si no la soporta, se cae al invoke crudo + parseo tolerante y se recuerda
+       (cache) para no reintentar el camino estructurado en futuras peticiones:
+       así se evita la doble generación (clave de rendimiento).
     """
-    try:
-        structured = llm.with_structured_output(AttackRoadmap)
-        result = structured.invoke(messages)
-        if isinstance(result, AttackRoadmap):
-            return result.model_dump()
-        return AttackRoadmap.model_validate(result).model_dump()
-    except (ValueError, json.JSONDecodeError, ValidationError):
-        raise
-    except Exception as e:
-        logger.info("structured_output no disponible/falló (%s); uso parseo manual", e)
+    global _structured_supported
+    if _structured_supported is not False:
+        try:
+            structured = llm.with_structured_output(AttackRoadmap)
+            result = structured.invoke(messages)
+            _structured_supported = True
+            if isinstance(result, AttackRoadmap):
+                return result.model_dump()
+            return AttackRoadmap.model_validate(result).model_dump()
+        except (ValueError, json.JSONDecodeError, ValidationError):
+            raise  # estructurado funcionó pero el contenido no validó
+        except Exception as e:
+            _structured_supported = False
+            logger.info("structured_output no soportado (%s); desactivado para la sesión", e)
 
     respuesta = llm.invoke(messages)
     return parse_roadmap(respuesta.content)
@@ -177,10 +187,12 @@ def generate_attack_path(hallazgos: list, noise_score: float, cve_fetcher=fetch_
        tácticas sigilosas; ruido alto => tácticas rápidas/agresivas.
     5. Cada paso DEBE incluir: mitre_technique (ID ATT&CK, p.ej. T1190),
        detection (cómo lo vería un blue team) y mitigation (contramedida).
+    6. Devuelve como MÁXIMO 5 pasos, los más relevantes. Sé conciso.
     """
 
     try:
-        llm = build_llm(model=DEFAULT_OFFENSIVE_MODEL, temperature=0.2)
+        # max_tokens acota la salida -> menos tokens que generar = más rápido.
+        llm = build_llm(model=DEFAULT_OFFENSIVE_MODEL, temperature=0.2, max_tokens=1024)
     except LLMConfigError as e:
         logger.warning("IA ofensiva sin token: %s", e)
         return _fallback("Error de Configuración IA", "Configurar token de IA", "medio", str(e))
