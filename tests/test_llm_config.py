@@ -15,17 +15,16 @@ def clean_env(monkeypatch):
     return monkeypatch
 
 
-def test_prioridad_optiveil_sobre_resto(clean_env):
+def test_prioridad_optiveil_sobre_openai(clean_env):
     clean_env.setenv("OPENAI_API_KEY", "openai")
-    clean_env.setenv("GITHUB_TOKEN", "github")
     clean_env.setenv("OPTIVEIL_AI_TOKEN", "optiveil")
     assert get_ai_token() == "optiveil"
 
 
-def test_fallback_a_github(clean_env):
-    clean_env.setenv("OPENAI_API_KEY", "openai")
+def test_github_token_se_ignora(clean_env):
+    # GitHub Models fue retirado: GITHUB_TOKEN ya no es un token de IA válido.
     clean_env.setenv("GITHUB_TOKEN", "github")
-    assert get_ai_token() == "github"
+    assert get_ai_token() is None
 
 
 def test_fallback_a_openai(clean_env):

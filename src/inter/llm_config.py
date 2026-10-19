@@ -3,12 +3,14 @@
 Unifica el acceso al proveedor de IA para que `IA_analyzer` e `IA_offensive`
 compartan credenciales, endpoint y manejo de errores en un solo lugar.
 
-Por defecto OptiVeil usa GitHub Models (endpoint de Azure AI Inference) con un
-token personal. El token se busca en este orden de prioridad:
+Por defecto OptiVeil usa OpenAI (api.openai.com). GitHub Models fue retirado
+(30/07/2026), por eso ya no se usa su endpoint ni GITHUB_TOKEN. El token se
+busca en este orden de prioridad:
 
-    OPTIVEIL_AI_TOKEN  ->  GITHUB_TOKEN  ->  OPENAI_API_KEY
+    OPTIVEIL_AI_TOKEN  ->  OPENAI_API_KEY
 
-Esto mantiene compatibilidad con configuraciones previas sin ambigüedad.
+Para otro proveedor compatible con OpenAI (Azure AI Foundry, Ollama/LM Studio,
+etc.) define OPTIVEIL_AI_BASE_URL; por defecto se usa el endpoint de OpenAI.
 """
 import os
 from langchain_openai import ChatOpenAI
@@ -16,11 +18,11 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-DEFAULT_BASE_URL = "https://models.inference.ai.azure.com"
-DEFAULT_ANALYST_MODEL = "gpt-4o-mini"
-DEFAULT_OFFENSIVE_MODEL = "gpt-5-mini"
+# Modelos por defecto (OpenAI). Sobreescribibles por entorno.
+DEFAULT_ANALYST_MODEL = os.getenv("OPTIVEIL_ANALYST_MODEL", "gpt-4o-mini")
+DEFAULT_OFFENSIVE_MODEL = os.getenv("OPTIVEIL_OFFENSIVE_MODEL", "gpt-4o-mini")
 
-_TOKEN_ENV_PRIORITY = ("OPTIVEIL_AI_TOKEN", "GITHUB_TOKEN", "OPENAI_API_KEY")
+_TOKEN_ENV_PRIORITY = ("OPTIVEIL_AI_TOKEN", "OPENAI_API_KEY")
 
 
 class LLMConfigError(RuntimeError):
@@ -46,13 +48,12 @@ def build_llm(model: str, temperature: float = 0.2) -> ChatOpenAI:
     if not token:
         raise LLMConfigError(
             "Token de IA no configurado. Define OPTIVEIL_AI_TOKEN "
-            "(o GITHUB_TOKEN / OPENAI_API_KEY) en tu entorno o .env."
+            "(o OPENAI_API_KEY) en tu entorno o .env."
         )
 
-    base_url = os.getenv("OPTIVEIL_AI_BASE_URL", DEFAULT_BASE_URL)
-    return ChatOpenAI(
-        model_name=model,
-        openai_api_key=token,
-        temperature=temperature,
-        base_url=base_url,
-    )
+    # base_url opcional: por defecto la SDK usa el endpoint de OpenAI.
+    base_url = os.getenv("OPTIVEIL_AI_BASE_URL") or None
+    kwargs = {"model_name": model, "openai_api_key": token, "temperature": temperature}
+    if base_url:
+        kwargs["base_url"] = base_url
+    return ChatOpenAI(**kwargs)
