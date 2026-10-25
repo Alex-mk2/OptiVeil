@@ -27,6 +27,10 @@ class AttackStep(BaseModel):
     cve_refs: List[str] = Field(default_factory=list)
     detection: str = ""              # cómo lo detectaría un blue team
     mitigation: str = ""             # contramedida defensiva
+    # Dependencias del grafo: ids de pasos prerequisito. [] = nodo de entrada.
+    # El saneo del DAG (sanitize_dag en IA_offensive) garantiza que solo queden
+    # referencias válidas; aquí solo coaccionamos el tipo.
+    depends_on: List[int] = Field(default_factory=list)
 
     @field_validator("risk", mode="before")
     @classmethod
@@ -41,6 +45,22 @@ class AttackStep(BaseModel):
         if isinstance(v, str):
             return [v] if v.strip() else []
         return list(v)
+
+    @field_validator("depends_on", mode="before")
+    @classmethod
+    def _coerce_depends_on(cls, v):
+        """Acepta None, un int suelto o una lista; descarta lo no numérico."""
+        if v is None:
+            return []
+        if isinstance(v, int):
+            return [v]
+        out = []
+        for x in v:
+            try:
+                out.append(int(x))
+            except (TypeError, ValueError):
+                continue
+        return out
 
 
 class AttackRoadmap(BaseModel):

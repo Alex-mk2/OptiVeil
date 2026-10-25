@@ -125,6 +125,28 @@ def parse_roadmap(raw_text: str) -> dict:
     return AttackRoadmap.model_validate(data).model_dump()
 
 
+def sanitize_dag(steps: list[dict]) -> list[dict]:
+    """Depura las dependencias del grafo (zero-trust sobre la salida del LLM).
+
+    Regla única y determinista: una dependencia es válida solo si apunta a un id
+    que EXISTE y es MENOR que el del propio paso. Así se eliminan de un solo pase
+    las autoreferencias, las referencias colgantes, los forward-refs y cualquier
+    ciclo (todas las aristas van de menor a mayor id => DAG garantizado), y encaja
+    con la semántica "ataca primero lo de mayor prioridad". Muta y devuelve `steps`.
+    """
+    valid_ids = {s.get("id") for s in steps}
+    for s in steps:
+        sid = s.get("id")
+        seen = set()
+        clean = []
+        for dep in s.get("depends_on") or []:
+            if dep in valid_ids and dep < sid and dep not in seen:
+                seen.add(dep)
+                clean.append(dep)
+        s["depends_on"] = clean
+    return steps
+
+
 def _fallback(phase: str, action: str, risk: str, justification: str) -> dict:
     """Hoja de ruta mínima con forma válida para que el frontend no se rompa."""
     return {"steps": [{"id": 1, "phase": phase, "action": action,
@@ -188,6 +210,10 @@ def generate_attack_path(hallazgos: list, noise_score: float, cve_fetcher=fetch_
     5. Cada paso DEBE incluir: mitre_technique (ID ATT&CK, p.ej. T1190),
        detection (cómo lo vería un blue team) y mitigation (contramedida).
     6. Devuelve como MÁXIMO 5 pasos, los más relevantes. Sé conciso.
+    7. Modela el ataque como un GRAFO, no una lista: cada paso incluye
+       "depends_on", la lista de ids de pasos PREREQUISITO (los que deben
+       cumplirse antes). Un punto de entrada tiene depends_on vacío. Una
+       dependencia SIEMPRE apunta a un id MENOR que el del propio paso.
     """
 
     try:
@@ -207,7 +233,8 @@ def generate_attack_path(hallazgos: list, noise_score: float, cve_fetcher=fetch_
         {{
           "id": 1, "phase": "Reconocimiento", "action": "...", "risk": "alto",
           "justification": "...", "mitre_technique": "T1190",
-          "cve_refs": ["CVE-2021-XXXX"], "detection": "...", "mitigation": "..."
+          "cve_refs": ["CVE-2021-XXXX"], "detection": "...", "mitigation": "...",
+          "depends_on": []
         }}
       ]
     }}
@@ -224,6 +251,10 @@ def generate_attack_path(hallazgos: list, noise_score: float, cve_fetcher=fetch_
         logger.exception("Fallo en la inferencia de IA ofensiva")
         return _fallback("Error de Conexión IA", "Fallo en LLM", "medio",
                          f"Error detectado: {str(e)[:80]}")
+
+    # Saneo del grafo: descarta dependencias inválidas que pueda inventar el LLM
+    # (ids colgantes, ciclos, forward-refs) antes de exponerlo al frontend.
+    roadmap["steps"] = sanitize_dag(roadmap.get("steps", []))
 
     # Adjunta el ranking de hallazgos para trazabilidad en el reporte/frontend.
     roadmap["prioritized_findings"] = [
