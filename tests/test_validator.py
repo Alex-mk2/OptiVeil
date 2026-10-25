@@ -52,7 +52,7 @@ def test_match_directo_es_confirmed():
         "curl-command": "curl -s http://10.0.0.1/.env",
         "extracted-results": ["DB_PASSWORD=secreto"],
     })
-    v = NucleiValidator(runner=lambda target: linea)
+    v = NucleiValidator(runner=lambda target, tags: linea)
     out = v.validate("10.0.0.1", [_finding()])
     assert out[0]["status"] == CONFIRMED
     assert out[0]["evidence"]["reproduce"].startswith("curl")
@@ -66,19 +66,19 @@ def test_match_por_version_es_likely():
         "port": 80, "matched-at": "10.0.0.1:80", "template-id": "nginx-version",
         "info": {"severity": "info", "tags": ["version", "tech"], "name": "nginx"},
     })
-    v = NucleiValidator(runner=lambda target: linea)
+    v = NucleiValidator(runner=lambda target, tags: linea)
     out = v.validate("10.0.0.1", [_finding()])
     assert out[0]["status"] == LIKELY
 
 
 def test_sin_match_es_not_confirmed():
-    v = NucleiValidator(runner=lambda target: "")  # nuclei no reportó nada
+    v = NucleiValidator(runner=lambda target, tags: "")  # nuclei no reportó nada
     out = v.validate("10.0.0.1", [_finding()])
     assert out[0]["status"] == NOT_CONFIRMED
 
 
 def test_backend_ausente_degrada_a_not_tested():
-    def _raise(target):
+    def _raise(target, tags):
         raise ValidatorUnavailable("nuclei no está")
     v = NucleiValidator(runner=_raise)
     out = v.validate("10.0.0.1", [_finding(), _finding(443, "https")])
@@ -93,10 +93,65 @@ def test_parse_ignora_lineas_no_json():
 
 
 def test_fallo_inesperado_del_backend_no_rompe():
-    def _boom(target):
+    def _boom(target, tags):
         raise RuntimeError("explotó algo raro")
     out = NucleiValidator(runner=_boom).validate("10.0.0.1", [_finding()])
     assert out[0]["status"] == NOT_TESTED
+
+
+# --- Acotado de plantillas y flags del comando (SPEC-0003) ---
+
+def _capture_nuclei_cmd(monkeypatch):
+    """Intercepta el comando que NucleiValidator le pasaría a nuclei."""
+    import inter.validator as vmod
+    captured = {}
+
+    def fake_run(cmd, **kwargs):
+        captured["cmd"] = cmd
+        class _P:
+            stdout = ""
+        return _P()
+
+    monkeypatch.setattr(vmod.shutil, "which", lambda b: "/usr/local/bin/nuclei")
+    monkeypatch.setattr(vmod.subprocess, "run", fake_run)
+    return captured
+
+
+def test_comando_se_acota_por_tags_del_servicio(monkeypatch):
+    captured = _capture_nuclei_cmd(monkeypatch)
+    NucleiValidator().validate("10.0.0.1", [_finding(21, "ftp", "")])
+    cmd = captured["cmd"]
+    assert "-tags" in cmd, "sin -tags nuclei corre el catálogo entero y revienta el timeout"
+    assert "ftp" in cmd[cmd.index("-tags") + 1]
+
+
+def test_comando_desactiva_update_check(monkeypatch):
+    captured = _capture_nuclei_cmd(monkeypatch)
+    NucleiValidator().validate("10.0.0.1", [_finding(21, "ftp", "")])
+    cmd = captured["cmd"]
+    assert "-disable-update-check" in cmd
+    assert "-no-update-templates" in cmd
+
+
+def test_service_se_sanea_antes_de_ser_tag(monkeypatch):
+    captured = _capture_nuclei_cmd(monkeypatch)
+    # input no confiable (viene del fingerprint): no debe llegar crudo al comando.
+    NucleiValidator().validate("10.0.0.1", [_finding(80, "ht tp;rm -rf", "")])
+    tags = captured["cmd"][captured["cmd"].index("-tags") + 1]
+    assert ";" not in tags and " " not in tags
+
+
+def test_sin_servicio_mapeable_degrada_sin_invocar_nuclei():
+    llamado = {"n": 0}
+
+    def runner(target, tags):
+        llamado["n"] += 1
+        return ""
+
+    out = NucleiValidator(runner=runner).validate("10.0.0.1", [_finding(9999, "", "")])
+    assert llamado["n"] == 0  # no se corre el catálogo sin acotar
+    assert out[0]["status"] == NOT_TESTED
+    assert "plantilla" in out[0]["evidence"].get("error", "").lower()
 
 
 # --- Gating de scope ESTRICTO en el endpoint ---

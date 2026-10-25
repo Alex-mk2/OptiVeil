@@ -107,8 +107,8 @@ explotable, con evidencia reproducible y redactada. Interfaz `Validator` pluggab
 primer backend `NucleiValidator` (orquesta **nuclei**, acotado a tags no intrusivos).
 Expuesta en `POST /api/validate`, que exige `enforce_scope(..., strict=True)`: para
 esta acción activa, **scope no definido = 403** (al revés del modo pasivo). nuclei es
-un **prerequisito externo opcional** (binario, no pip); si falta, degrada a
-`not_tested` sin romper.
+un binario externo (no pip): **se instala en la imagen Docker** (ver `src/Dockerfile`);
+en ejecución local es opcional y, si falta, el validador degrada a `not_tested` sin romper.
 
 **Persistencia.** SQLAlchemy 2.x + Alembic (`migrations/versions/`). PostgreSQL en
 producción/Docker; SQLite en memoria en tests. Config vía `DATABASE_URL`.

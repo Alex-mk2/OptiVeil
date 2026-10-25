@@ -35,6 +35,21 @@ Contexto obligatorio: [CLAUDE.md](../../../CLAUDE.md) y
 - **Zero-trust.** Muchos bugs vienen de confiar en input/datos de Scapy sin
   validar. Sospecha de eso primero.
 
+## Fase 0 — Rama
+
+Una rama por bug. Nunca arregles sobre `main` ni reutilices la rama de otra
+tarea. Antes de escribir el test de la Fase 1, nace una rama desde la base
+**actualizada**:
+
+```bash
+git switch main && git pull --ff-only
+git switch -c fix/<slug-corto>        # mismo slug que el SPEC-NNNN
+```
+
+Si el bug vive en código que **aún no está en `main`** (otra rama sin mergear),
+basa la rama en esa rama en vez de `main`, y déjalo anotado en la spec
+(`Rama base:`). Así cada fix es aislado, revisable y revertible por separado.
+
 ## Fase 1 — Reproducir (test que falla primero)
 
 Antes de tocar código fuente, escribe un test que **reproduzca el bug y falle**.

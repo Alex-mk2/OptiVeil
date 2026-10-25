@@ -38,6 +38,10 @@ _UNSAFE_TAGS = ("dos", "intrusive", "fuzz", "brute-force", "bruteforce")
 
 _SNIPPET_MAX = 300  # longitud máxima del fragmento de evidencia
 
+# Caracteres válidos para un tag de nuclei. El `service` viene del fingerprint
+# (input no confiable): se sanea antes de construir el comando (SPEC-0003).
+_TAG_RE = re.compile(r"[^a-z0-9-]")
+
 
 class ValidatorUnavailable(RuntimeError):
     """El backend de validación no está disponible (p. ej. binario ausente)."""
@@ -89,23 +93,49 @@ class NucleiValidator(Validator):
         # runner inyectable para tests (evita ejecutar nuclei y tocar la red).
         self._runner = runner or self._run_nuclei
 
-    def _run_nuclei(self, target: str) -> str:
+    @staticmethod
+    def _service_tags(findings: list[dict]) -> list[str]:
+        """Tags de nuclei derivados del servicio de cada hallazgo, saneados.
+
+        Zero-trust: el `service` viene del fingerprint; se reduce a `[a-z0-9-]`.
+        Distintos y en orden de aparición.
+        """
+        tags: list[str] = []
+        for f in findings:
+            tag = _TAG_RE.sub("", str(f.get("service", "")).lower())
+            if tag and tag not in tags:
+                tags.append(tag)
+        return tags
+
+    def _run_nuclei(self, target: str, tags: list[str]) -> str:
         if shutil.which(self._binary) is None:
             raise ValidatorUnavailable(
                 f"nuclei no encontrado en PATH ('{self._binary}'). Instálalo "
                 "o usa otro backend de validación."
             )
+        # -tags: solo plantillas del servicio del hallazgo (no el catálogo entero).
+        # -disable-update-check / -no-update-templates: sin red en caliente; evita
+        # que el chequeo de plantillas contra GitHub estanque la corrida (SPEC-0003).
         cmd = [
             self._binary, "-u", target, "-jsonl", "-silent",
+            "-tags", ",".join(tags),
             "-etags", ",".join(_UNSAFE_TAGS),  # excluye lo no seguro
             "-timeout", "10",
+            "-disable-update-check", "-no-update-templates",
         ]
         proc = subprocess.run(cmd, capture_output=True, text=True, timeout=self._timeout)
         return proc.stdout
 
     def validate(self, target: str, findings: list[dict]) -> list[dict]:
+        tags = self._service_tags(findings)
+        if not tags:
+            # Sin un servicio mapeable no acotamos: antes que correr el catálogo
+            # completo (lento, ruidoso), degradamos honesto a "no probado".
+            return [_result(f, NOT_TESTED,
+                            {"error": "sin plantillas acotadas para el servicio"},
+                            "nuclei") for f in findings]
         try:
-            raw = self._runner(target)
+            raw = self._runner(target, tags)
         except ValidatorUnavailable as e:
             logger.warning("Validación no disponible: %s", e)
             return [_result(f, NOT_TESTED, {"error": str(e)[:120]}, "nuclei") for f in findings]
