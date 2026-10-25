@@ -22,8 +22,6 @@ app.add_middleware(
 )
 
 
-# El esquema lo gestiona Alembic (migrations/). Ejecuta `alembic upgrade head`
-# antes de arrancar. No usamos create_all para evitar drift con las migraciones.
 app.include_router(strategy.router)
 app.include_router(scanner.router)
 app.include_router(reports.router)
