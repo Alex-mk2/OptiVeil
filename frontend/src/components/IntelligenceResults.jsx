@@ -1,7 +1,16 @@
 import { useEffect, useState } from 'react';
-import { Server, CheckCircle, Radar, Activity, ChevronRight, AlertTriangle, ShieldAlert, LineChart } from 'lucide-react';
+import { Server, CheckCircle, Radar, Activity, ChevronRight, AlertTriangle, ShieldAlert, LineChart, ShieldCheck, Loader2 } from 'lucide-react';
 import ParetoVisualization from './ParetoVisualization';
 import AttackRoadmap from './AttackRoadmap';
+import { ValidationService } from '../services/api';
+
+// Estilos del badge según el veredicto de validación (SPEC-0002).
+const VALIDATION_STYLES = {
+  confirmed:     { c: 'text-emerald-400 border-emerald-400/30 bg-emerald-400/10', label: 'Confirmado' },
+  likely:        { c: 'text-amber-400 border-amber-400/30 bg-amber-400/10',       label: 'Probable' },
+  not_confirmed: { c: 'text-zinc-400 border-zinc-600/30 bg-zinc-600/10',          label: 'No confirmado' },
+  not_tested:    { c: 'text-zinc-500 border-zinc-700/30 bg-zinc-700/10',          label: 'No probado' },
+};
 
 const TACTICAL_MESSAGES = [
   "Inicializando población aleatoria de configuraciones...",
@@ -14,9 +23,46 @@ const TACTICAL_MESSAGES = [
   "Sincronizando con el motor de Fingerprinting..."
 ];
 
-function IntelligenceResults({ result, loading, error }) {
+function IntelligenceResults({ result, loading, error, target }) {
   const [tacticalMessage, setTacticalMessage] = useState(TACTICAL_MESSAGES[0]);
-  const [activeTab, setActiveTab] = useState('telemetry'); 
+  const [activeTab, setActiveTab] = useState('telemetry');
+  // Validación no destructiva (opt-in): mapa puerto -> resultado.
+  const [validation, setValidation] = useState({});
+  const [validating, setValidating] = useState(false);
+  const [validationError, setValidationError] = useState('');
+
+  const handleValidate = async () => {
+    if (!result?.findings?.length) return;
+    setValidating(true);
+    setValidationError('');
+    try {
+      const findings = result.findings.map((f) => ({
+        port: f.port, service: f.service, banner: f.banner || '',
+      }));
+      const data = await ValidationService.validate(target, findings);
+      const map = {};
+      (data.results || []).forEach((r) => { map[r.port] = r; });
+      setValidation(map);
+    } catch (err) {
+      setValidationError(
+        err.response?.data?.detail || 'No se pudo validar. ¿El objetivo está en el scope autorizado?'
+      );
+    } finally {
+      setValidating(false);
+    }
+  };
+
+  const validationBadge = (port) => {
+    const r = validation[port];
+    if (!r) return <span className="text-zinc-600 text-[10px]">—</span>;
+    const s = VALIDATION_STYLES[r.status] || VALIDATION_STYLES.not_tested;
+    const title = r.evidence?.reproduce ? `Reproducir: ${r.evidence.reproduce}` : '';
+    return (
+      <span title={title} className={`px-2 py-1 rounded text-[9px] uppercase font-bold border ${s.c}`}>
+        {s.label}
+      </span>
+    );
+  };
 
   useEffect(() => {
     if (loading) {
@@ -141,7 +187,24 @@ function IntelligenceResults({ result, loading, error }) {
                 )}
 
                 <section>
-                  <h3 className="text-xs text-zinc-500 uppercase tracking-widest mb-4">Servicios Identificados</h3>
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-xs text-zinc-500 uppercase tracking-widest">Servicios Identificados</h3>
+                    <button
+                      onClick={handleValidate}
+                      disabled={validating || !result.findings?.length}
+                      title="Comprobación activa NO destructiva. Requiere que el objetivo esté en el scope autorizado."
+                      className="flex items-center gap-2 px-3 py-1.5 rounded text-[10px] font-bold uppercase tracking-widest border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      {validating
+                        ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Validando...</>
+                        : <><ShieldCheck className="w-3.5 h-3.5" /> Validar explotabilidad</>}
+                    </button>
+                  </div>
+                  {validationError && (
+                    <div className="mb-4 bg-red-500/10 border border-red-500/20 text-red-400 p-3 rounded text-xs flex items-start gap-2">
+                      <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" /> {validationError}
+                    </div>
+                  )}
                   <div className="bg-[#0a0a0b] rounded border border-zinc-800 overflow-hidden shadow-lg">
                     <table className="w-full text-left text-sm">
                       <thead className="bg-zinc-900/80 border-b border-zinc-800 text-zinc-400">
@@ -150,6 +213,7 @@ function IntelligenceResults({ result, loading, error }) {
                           <th className="p-4">SERVICIO</th>
                           <th className="p-4">FINGERPRINT / BANNER</th>
                           <th className="p-4">OS GUESS</th>
+                          <th className="p-4">VALIDACIÓN</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-zinc-800/50">
@@ -168,6 +232,7 @@ function IntelligenceResults({ result, loading, error }) {
                                 {finding.os_guess}
                               </span>
                             </td>
+                            <td className="p-4">{validationBadge(finding.port)}</td>
                           </tr>
                         ))}
                       </tbody>

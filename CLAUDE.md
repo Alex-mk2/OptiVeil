@@ -101,6 +101,15 @@ rendimiento en modelos locales). Si falta token lanza `LLMConfigError` para degr
 mensaje claro. GitHub Models quedó retirado (30/07/2026): no reintroducir ese endpoint ni
 `GITHUB_TOKEN`.
 
+**Validación de explotabilidad (SPEC-0002) — [src/inter/validator.py](src/inter/validator.py).**
+Comprobación **no destructiva** (observación activa) de si un hallazgo es realmente
+explotable, con evidencia reproducible y redactada. Interfaz `Validator` pluggable;
+primer backend `NucleiValidator` (orquesta **nuclei**, acotado a tags no intrusivos).
+Expuesta en `POST /api/validate`, que exige `enforce_scope(..., strict=True)`: para
+esta acción activa, **scope no definido = 403** (al revés del modo pasivo). nuclei es
+un **prerequisito externo opcional** (binario, no pip); si falta, degrada a
+`not_tested` sin romper.
+
 **Persistencia.** SQLAlchemy 2.x + Alembic (`migrations/versions/`). PostgreSQL en
 producción/Docker; SQLite en memoria en tests. Config vía `DATABASE_URL`.
 

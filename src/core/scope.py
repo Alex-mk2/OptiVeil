@@ -43,10 +43,16 @@ def load_scope() -> list:
     return []
 
 
-def is_in_scope(target: str, entries: list) -> bool:
-    """¿El objetivo está autorizado? Sin scope definido => True (sin restricción)."""
+def is_in_scope(target: str, entries: list, strict: bool = False) -> bool:
+    """¿El objetivo está autorizado?
+
+    Sin scope definido: en modo normal se permite (uso en laboratorio); en modo
+    `strict` se DENIEGA. El modo estricto es para acciones activas/intrusivas
+    (p. ej. validación de explotabilidad), donde operar "sin scope" es un riesgo
+    que no debe depender de la buena fe del operador.
+    """
     if not entries:
-        return True
+        return not strict
 
     try:
         ip = ipaddress.ip_address(target)
@@ -84,14 +90,20 @@ def audit_log(action: str, target: str, allowed: bool, detail: str = "",
         logger.warning("No se pudo escribir el audit log: %s", e)
 
 
-def enforce_scope(action: str, target: str):
-    """Comprueba el scope y registra la auditoría. Lanza si está fuera de scope."""
+def enforce_scope(action: str, target: str, strict: bool = False):
+    """Comprueba el scope y registra la auditoría. Lanza si está fuera de scope.
+
+    Con `strict=True`, un scope no definido se rechaza (ver `is_in_scope`).
+    """
     from fastapi import HTTPException
 
     entries = load_scope()
-    allowed = is_in_scope(target, entries)
-    audit_log(action, target, allowed,
-              detail="sin scope definido" if not entries else "")
+    allowed = is_in_scope(target, entries, strict=strict)
+    if not entries:
+        detail = "modo estricto: scope no definido => denegado" if strict else "sin scope definido"
+    else:
+        detail = ""
+    audit_log(action, target, allowed, detail=detail)
     if not allowed:
         raise HTTPException(status_code=403,
                             detail=f"Objetivo '{target}' fuera del scope autorizado")

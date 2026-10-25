@@ -13,3 +13,4 @@ pierdan con el tiempo. Lo gestionan las skills `sdd_feature` y `sdd_bug_fix`
 | ID | Título | Tipo | Estado | Fecha |
 |----|--------|------|--------|-------|
 | [SPEC-0001](SPEC-0001-ruta-de-ataque-grafo.md) | Ruta de ataque como grafo priorizado | feature | Implementada | 2026-10-25 |
+| [SPEC-0002](SPEC-0002-validacion-no-destructiva.md) | Validación no destructiva de explotabilidad | feature | Implementada | 2026-10-25 |

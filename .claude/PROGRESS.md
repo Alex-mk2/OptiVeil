@@ -5,7 +5,9 @@
 
 ## Estado actual
 - Rama: `perf/offensive-ai-speed` — acelerar la IA ofensiva (sin doble generación, salida acotada por `max_tokens`).
-- Tarea en curso: ninguna. Última cerrada: [SPEC-0001](../docs/specs/SPEC-0001-ruta-de-ataque-grafo.md) (ruta de ataque como grafo) — **Implementada**, `pytest -ra` 108 passed.
+- Tarea en curso: ninguna. Backend de SPEC-0002 implementado; falta verificación visual del frontend (dev server).
+- Última cerrada: [SPEC-0002](../docs/specs/SPEC-0002-validacion-no-destructiva.md) (validación NO destructiva de explotabilidad) — **Implementada**, `pytest -ra` 121 passed. Endpoint `/api/validate` con scope estricto; backend nuclei pluggable.
+- Anterior: [SPEC-0001](../docs/specs/SPEC-0001-ruta-de-ataque-grafo.md) (ruta de ataque como grafo) — Implementada, en PR.
 
 ## Decisiones
 - 2026-10-25 — Adoptado flujo SDD con skills propias `sdd_feature` y `sdd_bug_fix` (patrón spec→plan→tareas→implementación→verificación). Por qué: estandarizar el trabajo y respetar las reglas del repo (minimización NSGA-II, scope, doble import).

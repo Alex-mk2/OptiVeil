@@ -159,6 +159,16 @@ export const StrategyService = {
 };
 
 
+export const ValidationService = {
+    // Validación NO destructiva de explotabilidad (SPEC-0002). Acción activa
+    // y opt-in: el backend exige scope estricto (403 si el target no está en scope).
+    validate: async (target, findings) => {
+        const response = await api.post('/api/validate', { target, findings });
+        return response.data; // { results: [...] }
+    }
+};
+
+
 export const PersistenceService = {
     syncData: async (data) => {
         try {

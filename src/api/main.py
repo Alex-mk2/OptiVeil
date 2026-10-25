@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from src.api.routers import strategy, scanner, reports, intelligence, persistence
+from src.api.routers import strategy, scanner, reports, intelligence, persistence, validation
 
 
 app = FastAPI(
@@ -27,6 +27,7 @@ app.include_router(scanner.router)
 app.include_router(reports.router)
 app.include_router(intelligence.router)
 app.include_router(persistence.router)
+app.include_router(validation.router)
 
 
 @app.get("/")
