@@ -4,11 +4,19 @@ import json
 import pytest
 from fastapi.testclient import TestClient
 
-from inter.IA_offensive import extract_json_block, parse_roadmap, generate_attack_path
+from inter.IA_offensive import extract_json_block, parse_roadmap, generate_attack_path, sanitize_dag
 from inter import IA_offensive
 from src.api.schemas import normalize_risk, AttackStep
 from src.api.main import app
 from src.api.routers import strategy as strategy_router
+
+
+@pytest.fixture(autouse=True)
+def _reset_structured_cache():
+    """Resetea el cache de capacidad de structured output entre tests."""
+    IA_offensive._structured_supported = None
+    yield
+    IA_offensive._structured_supported = None
 
 
 # --- extract_json_block ---
@@ -125,6 +133,37 @@ def test_generate_attack_path_exito(monkeypatch):
     assert "prioritized_findings" in out
 
 
+class _CountingLLM:
+    """Cuenta intentos de structured output (que fallan) e invokes crudos."""
+    def __init__(self, content):
+        self._content = content
+        self.structured_calls = 0
+        self.invoke_calls = 0
+
+    def with_structured_output(self, _schema):
+        self.structured_calls += 1
+        raise RuntimeError("structured output no soportado")
+
+    def invoke(self, _messages):
+        self.invoke_calls += 1
+        return _FakeMsg(self._content)
+
+
+def test_structured_output_se_cachea_tras_fallo():
+    content = '{"steps":[{"id":1,"phase":"R","action":"a","risk":"bajo","justification":"j"}]}'
+    llm = _CountingLLM(content)
+
+    IA_offensive._roadmap_from_llm(llm, [])
+    assert IA_offensive._structured_supported is False
+    assert llm.structured_calls == 1
+    assert llm.invoke_calls == 1
+
+    # Segunda petición: ya NO reintenta el camino estructurado (evita doble gen).
+    IA_offensive._roadmap_from_llm(llm, [])
+    assert llm.structured_calls == 1  # sin incremento
+    assert llm.invoke_calls == 2
+
+
 def test_generate_attack_path_structured_output(monkeypatch):
     from src.api.schemas import AttackRoadmap
     rm = AttackRoadmap.model_validate({"steps": [
@@ -178,3 +217,76 @@ def test_strategy_live_usa_motor_mockeado(client, monkeypatch):
 def test_strategy_get_inexistente_404(client):
     r = client.get("/api/strategy/203.0.113.77")
     assert r.status_code == 404
+
+
+# --- sanitize_dag: saneo del grafo (zero-trust sobre la salida del LLM) ---
+
+def _steps(*specs):
+    """Helper: construye steps mínimos [(id, depends_on), ...]."""
+    return [{"id": i, "depends_on": deps} for i, deps in specs]
+
+
+def test_sanitize_dag_elimina_ids_colgantes():
+    out = sanitize_dag(_steps((1, []), (2, [99])))
+    assert out[1]["depends_on"] == []  # 99 no existe
+
+
+def test_sanitize_dag_elimina_autoreferencia():
+    out = sanitize_dag(_steps((1, [1]), (2, [2])))
+    assert out[0]["depends_on"] == []
+    assert out[1]["depends_on"] == []
+
+
+def test_sanitize_dag_rompe_ciclos():
+    # 1 depende de 2 y 2 depende de 1: la arista "hacia adelante" (1->2) se cae.
+    out = sanitize_dag(_steps((1, [2]), (2, [1])))
+    assert out[0]["depends_on"] == []   # 2 no es < 1
+    assert out[1]["depends_on"] == [1]  # 1 sí es < 2, dependencia válida
+
+
+def test_sanitize_dag_descarta_forward_refs():
+    out = sanitize_dag(_steps((1, [3]), (2, []), (3, [1, 2])))
+    assert out[0]["depends_on"] == []        # 3 es forward-ref
+    assert out[2]["depends_on"] == [1, 2]    # ambas válidas (menores)
+
+
+def test_sanitize_dag_deduplica_preservando_orden():
+    out = sanitize_dag(_steps((1, []), (2, []), (3, [1, 2, 1])))
+    assert out[2]["depends_on"] == [1, 2]
+
+
+def test_sanitize_dag_conserva_dependencias_validas():
+    out = sanitize_dag(_steps((1, []), (2, [1]), (3, [1, 2])))
+    assert [s["depends_on"] for s in out] == [[], [1], [1, 2]]
+
+
+# --- depends_on en el schema y en generate_attack_path ---
+
+def test_attackstep_depends_on_default_vacio():
+    s = AttackStep(id=1, phase="Recon", action="scan")
+    assert s.depends_on == []
+
+
+@pytest.mark.parametrize("entrada,esperado", [
+    (None, []),
+    (2, [2]),
+    ([1, 2], [1, 2]),
+    (["1", 2, "x"], [1, 2]),  # coacciona ints, descarta lo no numérico
+])
+def test_attackstep_coerce_depends_on(entrada, esperado):
+    s = AttackStep(id=3, phase="p", action="a", depends_on=entrada)
+    assert s.depends_on == esperado
+
+
+def test_generate_attack_path_sanea_depends_on(monkeypatch):
+    # El LLM devuelve una dependencia colgante (99) y una válida (1); solo
+    # sobrevive la válida tras el saneo.
+    content = ('{"steps":['
+               '{"id":1,"phase":"Recon","action":"a","risk":"bajo","justification":"j","depends_on":[]},'
+               '{"id":2,"phase":"Explotación","action":"b","risk":"alto","justification":"k","depends_on":[1,99]}'
+               ']}')
+    monkeypatch.setattr(IA_offensive, "build_llm", lambda **kw: _FakeLLM(content))
+    out = generate_attack_path([{"port": 80, "service": "http", "banner": "nginx"}],
+                               noise_score=2.0, cve_fetcher=_NO_CVES)
+    assert out["steps"][0]["depends_on"] == []
+    assert out["steps"][1]["depends_on"] == [1]

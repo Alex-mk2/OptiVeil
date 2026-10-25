@@ -45,3 +45,9 @@ def test_build_llm_con_token_no_lanza(clean_env):
     clean_env.setenv("OPTIVEIL_AI_TOKEN", "token-de-prueba")
     llm = build_llm(model=llm_config.DEFAULT_ANALYST_MODEL)
     assert llm is not None
+
+
+def test_build_llm_pasa_max_tokens(clean_env):
+    clean_env.setenv("OPTIVEIL_AI_TOKEN", "token-de-prueba")
+    llm = build_llm(model=llm_config.DEFAULT_ANALYST_MODEL, max_tokens=321)
+    assert getattr(llm, "max_tokens", None) == 321

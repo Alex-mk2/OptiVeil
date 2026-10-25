@@ -1,79 +1,114 @@
-import { ShieldAlert, Crosshair, Terminal, Activity} from 'lucide-react';
+import { useMemo } from 'react';
+import ReactFlow, { Background, Controls, MarkerType } from 'reactflow';
+import 'reactflow/dist/style.css';
+import { ShieldAlert } from 'lucide-react';
+
+// Colores por nivel de riesgo (coherentes con el resto del dashboard).
+const riskStyles = (risk) => {
+  const r = (risk || '').toLowerCase();
+  if (r.includes('alto') || r.includes('crítico')) return { border: '#f87171', text: 'text-red-400' };
+  if (r.includes('medio')) return { border: '#fbbf24', text: 'text-amber-400' };
+  return { border: '#34d399', text: 'text-emerald-400' };
+};
+
+// Layout por niveles: la profundidad de un paso es 1 + la de su dependencia más
+// profunda (0 si es un punto de entrada). El saneo del backend garantiza que las
+// dependencias apuntan a ids menores, así que procesar por id ascendente basta.
+function layout(steps) {
+  const byId = new Map(steps.map((s) => [s.id, s]));
+  const hasDeps = steps.some((s) => (s.depends_on || []).length > 0);
+  const sorted = [...steps].sort((a, b) => a.id - b.id);
+
+  const level = new Map();
+  sorted.forEach((s, i) => {
+    const deps = hasDeps ? (s.depends_on || []) : (i > 0 ? [sorted[i - 1].id] : []);
+    const lv = deps.length
+      ? Math.max(...deps.map((d) => (level.get(d) ?? 0) + 1))
+      : 0;
+    level.set(s.id, lv);
+  });
+
+  // Reparte horizontalmente los pasos que comparten nivel.
+  const perLevel = new Map();
+  const COL = 300, ROW = 170;
+  const nodes = sorted.map((s) => {
+    const lv = level.get(s.id);
+    const col = perLevel.get(lv) || 0;
+    perLevel.set(lv, col + 1);
+    const st = riskStyles(s.risk);
+    return {
+      id: String(s.id),
+      position: { x: col * COL, y: lv * ROW },
+      data: {
+        label: (
+          <div className="text-left">
+            <div className="text-[9px] uppercase tracking-widest text-zinc-500 font-bold mb-1">
+              Fase {s.id}: <span className="text-zinc-300">{s.phase}</span>
+            </div>
+            <div className="text-white text-xs font-medium mb-1">{s.action}</div>
+            <div className="flex items-center gap-2 text-[9px]">
+              <span className={`uppercase font-bold ${st.text}`}>Riesgo {s.risk}</span>
+              {s.mitre_technique && <span className="text-cyan-400 font-mono">{s.mitre_technique}</span>}
+            </div>
+          </div>
+        ),
+      },
+      style: {
+        background: '#0a0a0b',
+        border: `1px solid ${st.border}`,
+        borderRadius: 10,
+        padding: 12,
+        width: 240,
+        color: '#fff',
+      },
+    };
+  });
+
+  // Aristas: cada dependencia (o la cadena lineal en el fallback) es un edge.
+  const edges = [];
+  sorted.forEach((s, i) => {
+    const deps = hasDeps ? (s.depends_on || []) : (i > 0 ? [sorted[i - 1].id] : []);
+    deps.forEach((d) => {
+      if (!byId.has(d)) return;
+      edges.push({
+        id: `e-${d}-${s.id}`,
+        source: String(d),
+        target: String(s.id),
+        animated: true,
+        markerEnd: { type: MarkerType.ArrowClosed, color: '#52525b' },
+        style: { stroke: '#52525b', strokeWidth: 1.5 },
+      });
+    });
+  });
+
+  return { nodes, edges };
+}
 
 function AttackRoadmap({ steps }) {
+  const { nodes, edges } = useMemo(() => layout(steps || []), [steps]);
+
   if (!steps || steps.length === 0) return null;
-
-  
-  const getRiskStyles = (risk) => {
-    const r = (risk || '').toLowerCase();
-    if (r.includes('alto') || r.includes('crítico')) {
-      return { text: 'text-red-400', bg: 'bg-red-400/10', border: 'border-red-400/20' };
-    }
-    if (r.includes('medio')) {
-      return { text: 'text-amber-400', bg: 'bg-amber-400/10', border: 'border-amber-400/20' };
-    }
-    return { text: 'text-emerald-400', bg: 'bg-emerald-400/10', border: 'border-emerald-400/20' };
-  };
-
-  
-  const getStepIcon = (id, totalSteps) => {
-    if (id === 1) return <Crosshair className="w-5 h-5 text-cyan-400" />; // Entrada
-    if (id === totalSteps) return <Terminal className="w-5 h-5 text-fuchsia-400" />; // Objetivo Final
-    return <Activity className="w-5 h-5 text-zinc-400" />; // Movimiento Lateral
-  };
 
   return (
     <div className="bg-[#121214] p-6 rounded-xl border border-zinc-800 shadow-inner mt-8">
       <h3 className="text-cyan-400 text-xs font-bold uppercase tracking-widest mb-6 flex items-center gap-2">
-        <ShieldAlert className="w-4 h-4" /> 
-        Ruta de Ataque Sugerida (IA Estratégica)
+        <ShieldAlert className="w-4 h-4" />
+        Ruta de Ataque Sugerida (Grafo IA)
       </h3>
-
-      {/* AQUÍ ESTÁ LA MAGIA: Contenedor con altura máxima y scroll interno */}
-      <div className="pr-4">
-        <div className="space-y-2 relative">
-          {steps.map((step, index) => {
-            const styles = getRiskStyles(step.risk);
-            
-            return (
-              <div key={step.id} className="relative group">
-                {/* Conector Vertical (Línea de tiempo) */}
-                {/* Ajustamos el bottom para que la línea no se corte feo con el scroll */}
-                {index !== steps.length - 1 && (
-                  <div className="absolute left-6 top-12 bottom-[-1.5rem] w-px bg-zinc-800 group-hover:bg-cyan-900/50 transition-colors z-0" />
-                )}
-                
-                {/* ... el resto de tu código de la tarjeta queda EXACTAMENTE IGUAL ... */}
-                <div className="relative z-10 flex gap-6 items-start">
-                  <div className="flex-shrink-0 w-12 h-12 rounded-full bg-zinc-950 border border-zinc-800 flex items-center justify-center shadow-lg mt-1 group-hover:border-cyan-500/50 transition-colors">
-                    {getStepIcon(step.id, steps.length)}
-                  </div>
-
-                  <div className="flex-1 bg-[#0a0a0b] border border-zinc-800/80 p-5 rounded-lg hover:border-zinc-700 transition-all hover:bg-zinc-900/40">
-                    <div className="flex flex-col md:flex-row md:items-center justify-between mb-3 gap-2">
-                      <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold">
-                        Fase {step.id}: <span className="text-zinc-300">{step.phase}</span>
-                      </span>
-                      <span className={`px-2 py-1 rounded text-[9px] uppercase font-bold border ${styles.bg} ${styles.text} ${styles.border}`}>
-                        Riesgo {step.risk}
-                      </span>
-                    </div>
-                    
-                    <h4 className="text-white font-medium text-sm mb-2">{step.action}</h4>
-                    
-                    <div className="bg-zinc-900/50 p-3 rounded border border-zinc-800/50">
-                      <p className="text-zinc-400 text-xs italic leading-relaxed">
-                        "{step.justification}"
-                      </p>
-                    </div>
-                  </div>
-                </div>
-                
-                {index !== steps.length - 1 && <div className="h-6" />}
-              </div>
-            );
-          })}
-        </div>
+      <div style={{ width: '100%', height: '520px' }} className="bg-[#0a0a0c] rounded-lg border border-zinc-800/80 overflow-hidden">
+        <ReactFlow
+          nodes={nodes}
+          edges={edges}
+          fitView
+          fitViewOptions={{ padding: 0.25 }}
+          minZoom={0.4}
+          maxZoom={1.5}
+          nodesDraggable={false}
+          nodesConnectable={false}
+        >
+          <Background color="#27272a" gap={24} size={1.5} variant="dots" />
+          <Controls showInteractive={false} className="bg-[#121214] border-zinc-800 fill-zinc-400 shadow-xl" />
+        </ReactFlow>
       </div>
     </div>
   );

@@ -207,3 +207,21 @@ marimo/_lsp/
 __marimo__/
 .vscode/
 scope.txt
+
+# Graphify: grafo de conocimiento regenerable en local (graph.json se reescribe
+# entero en cada build => diffs enormes). Se reconstruye con `graphify . --code-only`.
+graphify-out/
+
+# Credenciales y llaves — NUNCA subir al repo. .env ya está cubierto arriba; esto
+# refuerza variantes y formatos de secreto. .env.example (plantilla) sí se versiona.
+.env.*
+!.env.example
+*.pem
+*.key
+*.pfx
+*.p12
+*.keystore
+secrets.*
+credentials.json
+# Alcance autorizado: puede contener IPs/hosts internos sensibles.
+scope.txt
