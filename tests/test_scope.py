@@ -58,3 +58,35 @@ def test_strategy_fuera_de_scope_devuelve_403(monkeypatch):
             "findings": [{"port": 22, "service": "ssh", "banner": "x"}],
         })
     assert r.status_code == 403
+
+
+def test_nmap_fuera_de_scope_devuelve_403(monkeypatch):
+    """Regresión SPEC-0004: /api/nmap es el endpoint más intrusivo (nmap -sV -O)
+    y debe pasar por enforce_scope. Antes lo ignoraba y ejecutaba nmap sin
+    gating ni auditoría contra cualquier objetivo."""
+    import src.api.routers.scanner as scanner_mod
+
+    def _run_prohibido(*a, **k):
+        raise AssertionError("nmap no debe ejecutarse contra un objetivo fuera de scope")
+
+    monkeypatch.setattr(scanner_mod.subprocess, "run", _run_prohibido)
+    monkeypatch.setenv("OPTIVEIL_SCOPE", "10.0.0.0/8")
+    with TestClient(app) as c:
+        r = c.post("/api/nmap", json={"target": "8.8.8.8", "stealth": 5, "ports": 5})
+    assert r.status_code == 403  # bloqueado ANTES de tocar la red
+
+
+def test_nmap_en_scope_no_bloquea(monkeypatch):
+    """El objetivo en scope sí llega a ejecutar nmap (subprocess mockeado): el
+    gating no rompe el camino feliz."""
+    import src.api.routers.scanner as scanner_mod
+
+    class _FakeProc:
+        stdout = "<nmaprun></nmaprun>"
+
+    monkeypatch.setattr(scanner_mod.subprocess, "run", lambda *a, **k: _FakeProc())
+    monkeypatch.setenv("OPTIVEIL_SCOPE", "10.0.0.0/8")
+    with TestClient(app) as c:
+        r = c.post("/api/nmap", json={"target": "10.0.0.5", "stealth": 5, "ports": 5})
+    assert r.status_code == 200
+    assert r.json()["status"] == "success"

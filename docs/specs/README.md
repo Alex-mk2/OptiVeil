@@ -15,3 +15,4 @@ pierdan con el tiempo. Lo gestionan las skills `sdd_feature` y `sdd_bug_fix`
 | [SPEC-0001](SPEC-0001-ruta-de-ataque-grafo.md) | Ruta de ataque como grafo priorizado | feature | Implementada | 2026-10-25 |
 | [SPEC-0002](SPEC-0002-validacion-no-destructiva.md) | Validación no destructiva de explotabilidad | feature | Implementada | 2026-10-25 |
 | [SPEC-0003](SPEC-0003-validador-nuclei-timeout.md) | El validador nuclei siempre degrada a not_tested | bugfix | Implementada | 2026-10-25 |
+| [SPEC-0004](SPEC-0004-nmap-enforce-scope.md) | `/api/nmap` no pasa por enforce_scope ni audita | bugfix | Implementada | 2026-10-25 |
