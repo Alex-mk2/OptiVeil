@@ -20,6 +20,15 @@ for path in (PROJECT_ROOT, SRC):
 # acepta una URL sqlite en memoria sin conectarse. Solo si no hay una definida.
 os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
 
+# Aísla los tests del .env del desarrollador. `database.py` hace load_dotenv() al
+# importarse, así que un OPTIVEIL_SCOPE local se colaría en el entorno de test y
+# sacaría de scope a los targets de prueba (p. ej. 10.0.0.1), rompiendo con 403
+# los tests de escaneo/estrategia que asumen modo pasivo. Se fija ANTES de que se
+# importe la app (load_dotenv no sobrescribe variables ya definidas). Los tests que
+# necesitan scope lo ponen con monkeypatch.setenv, que sí tiene prioridad.
+os.environ["OPTIVEIL_SCOPE"] = ""
+os.environ["OPTIVEIL_SCOPE_FILE"] = os.path.join(PROJECT_ROOT, "__no_scope_file__")
+
 
 @pytest.fixture(autouse=True)
 def _silence_audit_log(monkeypatch):

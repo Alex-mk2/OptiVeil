@@ -85,3 +85,18 @@ class LiveStrategyRequest(BaseModel):
     target: str
     stealth: int
     findings: list[NmapFinding]
+
+
+class ValidationRequest(BaseModel):
+    target: str
+    findings: list[NmapFinding]
+
+
+class ValidationResult(BaseModel):
+    port: int | None = None
+    service: str = "unknown"
+    # confirmed | likely | not_confirmed | not_tested
+    status: str = "not_tested"
+    # Evidencia reproducible (redactada): {reproduce, snippet, template}.
+    evidence: dict = Field(default_factory=dict)
+    source: str = ""

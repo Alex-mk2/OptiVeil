@@ -7,11 +7,13 @@ function AuditDashboard() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
+  const [target, setTarget] = useState('');
 
   const handleScanSubmit = async (target, stealth, ports) => {
     setLoading(true);
     setError('');
     setResult(null);
+    setTarget(target);
 
     try {
       const data = await auditService.startScan(target, stealth, ports);
@@ -30,7 +32,7 @@ function AuditDashboard() {
         <AuditForm onScan={handleScanSubmit} loading={loading} />
       </section>
       <section className="lg:col-span-8">
-        <IntelligenceResults result={result} loading={loading} error={error} />
+        <IntelligenceResults result={result} loading={loading} error={error} target={target} />
       </section>
     </div>
   );
