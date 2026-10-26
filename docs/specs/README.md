@@ -14,3 +14,4 @@ pierdan con el tiempo. Lo gestionan las skills `sdd_feature` y `sdd_bug_fix`
 |----|--------|------|--------|-------|
 | [SPEC-0001](SPEC-0001-ruta-de-ataque-grafo.md) | Ruta de ataque como grafo priorizado | feature | Implementada | 2026-10-25 |
 | [SPEC-0004](SPEC-0004-nmap-enforce-scope.md) | `/api/nmap` no pasa por enforce_scope ni audita | bugfix | Implementada | 2026-10-25 |
+| [SPEC-0005](SPEC-0005-nmap-usa-nsga.md) | `/api/nmap` consume la config de NSGA-II (no presets -T) | feature | Implementada | 2026-10-25 |
