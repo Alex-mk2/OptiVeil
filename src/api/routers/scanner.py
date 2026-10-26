@@ -197,6 +197,11 @@ def get_topology(target: str, db: Session = Depends(get_db)):
 @router.post("/nmap")
 def execute_nmap(req: ScanRequest):
     """ Ejecuta un escaneo de Nmap con los parámetros especificados en la solicitud. Construye el comando de Nmap dinámicamente según el nivel de sigilo y la cantidad de puertos a escanear, ejecuta el comando y procesa la salida XML para extraer información sobre los puertos abiertos, servicios y banners detectados. Devuelve un resumen estructurado de los hallazgos o un error si la ejecución falla. """
+    # nmap -sV -O es la acción más intrusiva de la app: debe pasar por el scope
+    # (y quedar auditada) ANTES de tocar la red. Va fuera del try para que el 403
+    # no lo capture el `except Exception` de abajo y se degrade a 500.
+    enforce_scope("nmap", str(req.target))
+
     nmap_command = ["nmap", "-sV", "-O", "-oX", "-"]
     
     

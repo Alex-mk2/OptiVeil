@@ -13,3 +13,4 @@ pierdan con el tiempo. Lo gestionan las skills `sdd_feature` y `sdd_bug_fix`
 | ID | Título | Tipo | Estado | Fecha |
 |----|--------|------|--------|-------|
 | [SPEC-0001](SPEC-0001-ruta-de-ataque-grafo.md) | Ruta de ataque como grafo priorizado | feature | Implementada | 2026-10-25 |
+| [SPEC-0004](SPEC-0004-nmap-enforce-scope.md) | `/api/nmap` no pasa por enforce_scope ni audita | bugfix | Implementada | 2026-10-25 |
