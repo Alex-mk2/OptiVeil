@@ -24,7 +24,7 @@
 ## Pendientes
 - [x] Commitear `.claude/` al control de versiones — hecho: está trackeado (skills + settings con hooks de graphify).
 - [ ] (Opcional) Montar el loop de evals del skill-creator si se quiere validar las skills SDD con métricas.
-- [ ] (Higiene) Podar ramas ya fusionadas: `feature/nmap-usa-nsga`, `fix/nmap-enforce-scope`, `fix/validator-scope-templates`, `perf/offensive-ai-speed` (local y remoto).
+- [x] (Higiene) Podadas las ramas ya fusionadas (local y remoto). Solo queda `main`.
 
 ## Trampas conocidas
 - Dos estilos de import conviven: API usa `src.inter.xxx`; engine usa `inter.xxx` vía `sys.path.append`. `tests/conftest.py` carga ambas raíces.
