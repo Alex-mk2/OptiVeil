@@ -4,9 +4,10 @@
 > código → `graphify query`. Esta bitácora → en qué vamos y por qué.
 
 ## Estado actual
-- Rama: `feat/pareto-interactivo` (SPEC-0006), nacida de `main` al día.
-- Tarea en curso: **SPEC-0006 — Frente de Pareto interactivo**. Implementada; `pytest -ra` 142 passed y `npm run build` OK. Pendiente: verificación manual del clic en la UI y merge a `main` (PR).
-- Última cerrada: [SPEC-0005](../docs/specs/SPEC-0005-nmap-usa-nsga.md) (`/api/nmap` consume la config de NSGA-II en vez de presets `-T`) — **Implementada y mergeada a main** (2026-10-28), `pytest -ra` 132 passed.
+- Rama: `main`, al día (SPEC-0006 mergeada a `origin/main`).
+- Tarea en curso: ninguna.
+- Última cerrada: [SPEC-0006](../docs/specs/SPEC-0006-pareto-interactivo.md) (Frente de Pareto interactivo: elegir la config desde el frente, no solo `stealth` 1-10) — **Implementada y mergeada a main** (2026-10-28), `pytest -ra` 142 passed, `npm run build` OK. Nota: el clic en la UI (criterio 6) queda a verificación manual al levantar la app.
+- Anterior: [SPEC-0005](../docs/specs/SPEC-0005-nmap-usa-nsga.md) (`/api/nmap` consume la config de NSGA-II en vez de presets `-T`) — Implementada.
 - Anterior: [SPEC-0003](../docs/specs/SPEC-0003-validador-nuclei-timeout.md) (nuclei siempre daba `not_tested`) — Implementada. Fix: `-disable-update-check`/`-no-update-templates` + `-tags <servicio>`.
 - Anterior: [SPEC-0002](../docs/specs/SPEC-0002-validacion-no-destructiva.md) (validación NO destructiva) — Implementada. Endpoint `/api/validate` con scope estricto; backend nuclei pluggable.
 - Anterior: [SPEC-0004](../docs/specs/SPEC-0004-nmap-enforce-scope.md) (`/api/nmap` ahora pasa por `enforce_scope` y audita) — Implementada.
