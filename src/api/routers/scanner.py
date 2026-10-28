@@ -7,6 +7,7 @@ import subprocess
 import xml.etree.ElementTree as ET
 from src.api.schemas import ScanRequest
 from src.core.engine import OptiVeilEngine
+from src.modules.stealth.nsga_II import run_nsga_ii, select_best_configuration
 from src.api.database import get_db, SessionLocal
 from src.api import models
 from src.core.scope import enforce_scope
@@ -203,21 +204,31 @@ def execute_nmap(req: ScanRequest):
     enforce_scope("nmap", str(req.target))
 
     nmap_command = ["nmap", "-sV", "-O", "-oX", "-"]
-    
-    
-    if req.stealth > 7:
-        nmap_command.append("-T0")
-    elif req.stealth > 4:
-        nmap_command.append("-T2")
-    else:
-        nmap_command.append("-T3")
-        
-        
+
+    # Premisa del proyecto: NSGA-II es el motor que optimiza la configuración de
+    # sigilo y nmap la ejecuta. En vez de los presets -T (3 velocidades fijas que
+    # pelearían con un timing explícito), se deriva la config Pareto-óptima para el
+    # nº de puertos y el stealth pedido, y se mapea a los flags equivalentes de nmap.
+    num_ports = min(req.ports, 65535)
+    X, F = run_nsga_ii(target_ports=num_ports)
+    config = select_best_configuration(X, F, stealth_level=req.stealth)["config"]
+
+    # wait_time_ms -> --scan-delay; threads -> --max-parallelism; packet_size ->
+    # --data-length (relleno aditivo: aproxima la dimensión de tamaño del motor).
+    scan_delay_ms = int(round(config["wait_time_ms"]))
+    max_parallelism = int(config["threads"])
+    data_length = int(config["packet_size"])
+    nmap_command.extend([
+        "--scan-delay", f"{scan_delay_ms}ms",
+        "--max-parallelism", str(max_parallelism),
+        "--data-length", str(data_length),
+    ])
+
     if req.ports < 65535:
         nmap_command.extend(["--top-ports", str(req.ports)])
     else:
         nmap_command.append("-p-")
-        
+
     nmap_command.append(str(req.target))
 
 
@@ -232,7 +243,16 @@ def execute_nmap(req: ScanRequest):
             "target": str(req.target),
             "stealth_applied": req.stealth,
             "status": "success",
-            "findings": puertos_encontrados
+            "findings": puertos_encontrados,
+            # Config que NSGA-II seleccionó y que nmap ejecutó (visibilidad: deja
+            # claro que el sigilo es el del motor, no un preset de nmap).
+            "nsga_config": {
+                "scan_delay_ms": scan_delay_ms,
+                "max_parallelism": max_parallelism,
+                "data_length": data_length,
+                "noise_score": config["metrics"]["noise_score"],
+                "estimated_time_sec": config["metrics"]["estimated_time_sec"],
+            },
         }
 
     except subprocess.TimeoutExpired:
