@@ -16,13 +16,17 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export const auditService = {
     // Encola el escaneo (202) y hace polling del job hasta que termina.
-    startScan: async (target, stealth, ports, { pollIntervalMs = 2000, timeoutMs = 600000 } = {}) => {
+    startScan: async (target, stealth, ports, { config = null, pollIntervalMs = 2000, timeoutMs = 600000 } = {}) => {
         try {
-            const { data } = await api.post('/api/scan', {
+            const payload = {
                 target,
                 stealth: parseInt(stealth),
-                ports: parseInt(ports)
-            });
+                ports: parseInt(ports),
+            };
+            // Config explícita elegida en el Frente de Pareto (SPEC-0006). Si no
+            // viene, el backend decide por `stealth` como siempre.
+            if (config) payload.config = config;
+            const { data } = await api.post('/api/scan', payload);
             const jobId = data.job_id;
             const deadline = Date.now() + timeoutMs;
 
@@ -45,6 +49,13 @@ export const auditService = {
     getReports: async () => {
         const response = await api.get('/api/reports/');
         return response.data;
+    },
+
+    // Frente de Pareto (SPEC-0006) para un nº de puertos; no toca ningún target
+    // (el frente depende solo de los puertos), así que no requiere scope.
+    getParetoFront: async (ports) => {
+        const { data } = await api.get('/api/strategy/pareto', { params: { ports: parseInt(ports) } });
+        return data; // { ports, pareto_front: [{ index, noise, time, config }] }
     }
 };
 

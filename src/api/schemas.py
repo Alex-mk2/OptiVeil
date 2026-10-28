@@ -69,12 +69,38 @@ class AttackRoadmap(BaseModel):
 
 
 
+# Config de escaneo: los 3 parámetros que optimiza NSGA-II. Los rangos son
+# espejo de CONFIG_BOUNDS en src/modules/stealth/nsga_II.py (el espacio de
+# búsqueda del problema), atados por un test de consistencia para evitar deriva.
+# Así solo se aceptan configs dentro del espacio que NSGA optimiza (zero-trust):
+# un valor fuera de rango da 422 al parsear la request, sin tocar la red.
+class ScanConfig(BaseModel):
+    wait_time_ms: float = Field(..., ge=10, le=5000)
+    packet_size: int = Field(..., ge=64, le=1500)
+    threads: int = Field(..., ge=1, le=10)
+
+
 class ScanRequest(BaseModel):
     target: IPvAnyAddress = Field(..., example="186.64.114.50")
     stealth: int = Field(5, ge=1, le=10)
-    ports: int = Field(100, ge=1)
-    
-    
+    ports: int = Field(100, ge=1, le=65535)
+    # Config explícita elegida en el Frente de Pareto (SPEC-0006): si viene, manda
+    # sobre `stealth`; si es None, se deriva de `stealth` como siempre (no-regresión).
+    config: ScanConfig | None = None
+
+
+class ParetoPoint(BaseModel):
+    index: int
+    noise: float
+    time: float
+    config: ScanConfig
+
+
+class ParetoFrontResponse(BaseModel):
+    ports: int
+    pareto_front: list[ParetoPoint]
+
+
 class NmapFinding(BaseModel):
     port: int
     service: str

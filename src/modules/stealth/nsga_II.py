@@ -8,15 +8,31 @@ from pymoo.operators.crossover.sbx import SBX
 from pymoo.operators.mutation.pm import PM
 from pymoo.operators.sampling.rnd import FloatRandomSampling
 
+# Rango del espacio de búsqueda de la config de sigilo (xl/xu del problema).
+# Única fuente de verdad: lo usa el problema para acotar NSGA-II y lo refleja la
+# validación de la API (ver ScanConfig en src/api/schemas.py, atada por un test
+# de consistencia). Orden de las variables: wait_time_ms, packet_size, threads.
+CONFIG_BOUNDS = {
+    "wait_time_ms": (10.0, 5000.0),
+    "packet_size": (64, 1500),
+    "threads": (1, 10),
+}
+
 class OptiVeilSthealthProblem(ElementwiseProblem):
     def __init__(self, target_ports):
         self.target_ports = target_ports
-        super().__init__(n_var=3,
-                         n_obj=2,
-                         n_ieq_constr = 0,
-                         xl = np.array([10, 64, 1]),  
-                         xu = np.array([5000, 1500, 10]))                 
-        
+        super().__init__(
+            n_var=3,
+            n_obj=2,
+            n_ieq_constr=0,
+            xl=np.array([CONFIG_BOUNDS["wait_time_ms"][0],
+                         CONFIG_BOUNDS["packet_size"][0],
+                         CONFIG_BOUNDS["threads"][0]]),
+            xu=np.array([CONFIG_BOUNDS["wait_time_ms"][1],
+                         CONFIG_BOUNDS["packet_size"][1],
+                         CONFIG_BOUNDS["threads"][1]]),
+        )
+
 
     def _evaluate(self, x, out, *args, **kwargs):
         wait_time = x[0] 
@@ -88,5 +104,46 @@ def select_best_configuration(X, F, stealth_level: int):
     
     return {
         "config": config_seleccionada,
-        "pareto_front": pareto_data 
+        "pareto_front": pareto_data
     }
+
+
+def pareto_front_with_configs(X, F):
+    """Empareja cada solución (`X`) con sus objetivos (`F`) en puntos del frente,
+    ordenados por ruido ascendente y con la config de cada punto, para que la API
+    exponga el frente completo y el operador elija una solución concreta.
+
+    Solo lectura: no muta `X` ni `F` (son los arrays cacheados de `run_nsga_ii`).
+    """
+    orden = np.argsort(F[:, 0])
+    puntos = []
+    for idx in orden:
+        x = X[idx]
+        f = F[idx]
+        puntos.append({
+            "index": int(idx),
+            "noise": float(f[0]),
+            "time": float(f[1]),
+            "config": {
+                "wait_time_ms": float(x[0]),
+                "packet_size": int(x[1]),
+                "threads": int(x[2]),
+            },
+        })
+    return puntos
+
+
+def metrics_for_config(config: dict, target_ports: int) -> dict:
+    """Evalúa una config explícita con la MISMA función de fitness del problema
+    (minimización), para no confiar en métricas que mande el cliente ni duplicar
+    la fórmula. Devuelve `noise_score` y `estimated_time_sec`.
+    """
+    problem = OptiVeilSthealthProblem(target_ports)
+    out = {}
+    x = np.array(
+        [config["wait_time_ms"], config["packet_size"], config["threads"]],
+        dtype=float,
+    )
+    problem._evaluate(x, out)
+    f = out["F"]
+    return {"noise_score": float(f[0]), "estimated_time_sec": float(f[1])}

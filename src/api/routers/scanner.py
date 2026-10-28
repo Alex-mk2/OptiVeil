@@ -43,7 +43,7 @@ def parse_nmap_xml(xml_output: str) -> list[dict]:
     return puertos_encontrados
 
 
-def _run_scan_job(job_id: str, target: str, stealth: int, ports: int):
+def _run_scan_job(job_id: str, target: str, stealth: int, ports: int, config: dict | None = None):
     """Ejecuta el motor en un worker síncrono (threadpool de Starlette), con su
     propia sesión de BD, y persiste el estado del job. No bloquea el event loop."""
     db = SessionLocal()
@@ -55,7 +55,7 @@ def _run_scan_job(job_id: str, target: str, stealth: int, ports: int):
         job.status = "running"
         db.commit()
 
-        engine = OptiVeilEngine(target=target, stealth=stealth, ports_count=ports)
+        engine = OptiVeilEngine(target=target, stealth=stealth, ports_count=ports, config=config)
         result = engine.execute()
 
         scan = models.AuditScan(
@@ -107,7 +107,8 @@ def start_scan(request: ScanRequest, background_tasks: BackgroundTasks, db: Sess
     db.commit()
 
     background_tasks.add_task(
-        _run_scan_job, job_id, str(request.target), request.stealth, request.ports
+        _run_scan_job, job_id, str(request.target), request.stealth, request.ports,
+        request.config.model_dump() if request.config else None,
     )
     return {"job_id": job_id, "status": "pending"}
 

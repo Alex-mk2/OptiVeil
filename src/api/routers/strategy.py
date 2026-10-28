@@ -1,8 +1,9 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 import os
 import json
 from src.inter.IA_offensive import generate_attack_path
-from src.api.schemas import LiveStrategyRequest
+from src.modules.stealth.nsga_II import run_nsga_ii, pareto_front_with_configs
+from src.api.schemas import LiveStrategyRequest, ParetoFrontResponse
 from src.core.scope import enforce_scope
 
 
@@ -20,6 +21,19 @@ def _safe_strategy_path(target: str) -> str:
     if os.path.commonpath([base, file_path]) != base:
         raise HTTPException(status_code=400, detail="Objetivo inválido")
     return file_path
+
+
+@router.get("/strategy/pareto", response_model=ParetoFrontResponse)
+def get_pareto_front(ports: int = Query(100, ge=1, le=65535)):
+    """Devuelve el Frente de Pareto (ruido vs. tiempo) para un nº de puertos, con
+    la config de cada punto, para que el operador elija la solución ANTES de
+    escanear.
+
+    Debe declararse ANTES de `/strategy/{target}`: si no, esa ruta dinámica captura
+    "pareto" como `target`. No pasa por `enforce_scope`: no toca ningún target (el
+    frente depende solo de `ports`, y la optimización está cacheada por ese valor)."""
+    X, F = run_nsga_ii(target_ports=ports)
+    return {"ports": ports, "pareto_front": pareto_front_with_configs(X, F)}
 
 
 @router.get("/strategy/{target}")

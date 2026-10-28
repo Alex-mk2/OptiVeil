@@ -9,14 +9,14 @@ function AuditDashboard() {
   const [error, setError] = useState('');
   const [target, setTarget] = useState('');
 
-  const handleScanSubmit = async (target, stealth, ports) => {
+  const handleScanSubmit = async (target, stealth, ports, config = null) => {
     setLoading(true);
     setError('');
     setResult(null);
     setTarget(target);
 
     try {
-      const data = await auditService.startScan(target, stealth, ports);
+      const data = await auditService.startScan(target, stealth, ports, { config });
       setResult(data);
     } catch (err) {
       console.error("Error en el escaneo:", err);
