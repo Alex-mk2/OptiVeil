@@ -4,10 +4,12 @@
 > código → `graphify query`. Esta bitácora → en qué vamos y por qué.
 
 ## Estado actual
-- Rama: `fix/validator-scope-templates` (base `perf/offensive-ai-speed`) — bugfix del validador nuclei.
-- Tarea en curso: ninguna. SPEC-0001/0002 verificados visualmente en Docker (grafo DAG OK; badges de validación OK). Pendiente: reconstruir la imagen backend (`--build`) para que el fix de SPEC-0003 tome efecto en caliente, y commitear.
-- Última cerrada: [SPEC-0003](../docs/specs/SPEC-0003-validador-nuclei-timeout.md) (el validador nuclei siempre daba `not_tested`) — **Implementada**, `pytest -ra` 125 passed. Causa raíz: nuclei chequeaba plantillas contra GitHub en cada corrida + corría el catálogo entero → timeout. Fix: `-disable-update-check`/`-no-update-templates` + `-tags <servicio>`.
-- Anterior: [SPEC-0002](../docs/specs/SPEC-0002-validacion-no-destructiva.md) (validación NO destructiva) — Implementada. Endpoint `/api/validate` con scope estricto; backend nuclei pluggable. nuclei instalado en la imagen Docker.
+- Rama: `main`, al día (todo lo de abajo fusionado y pusheado a `origin/main`).
+- Tarea en curso: ninguna.
+- Última cerrada: [SPEC-0005](../docs/specs/SPEC-0005-nmap-usa-nsga.md) (`/api/nmap` consume la config de NSGA-II en vez de presets `-T`) — **Implementada y mergeada a main** (2026-10-28), `pytest -ra` 132 passed.
+- Anterior: [SPEC-0003](../docs/specs/SPEC-0003-validador-nuclei-timeout.md) (nuclei siempre daba `not_tested`) — Implementada. Fix: `-disable-update-check`/`-no-update-templates` + `-tags <servicio>`.
+- Anterior: [SPEC-0002](../docs/specs/SPEC-0002-validacion-no-destructiva.md) (validación NO destructiva) — Implementada. Endpoint `/api/validate` con scope estricto; backend nuclei pluggable.
+- Anterior: [SPEC-0004](../docs/specs/SPEC-0004-nmap-enforce-scope.md) (`/api/nmap` ahora pasa por `enforce_scope` y audita) — Implementada.
 - Anterior: [SPEC-0001](../docs/specs/SPEC-0001-ruta-de-ataque-grafo.md) (ruta de ataque como grafo) — Implementada.
 
 ## Decisiones
@@ -20,8 +22,9 @@
 - 2026-10-25 — Regla: **una rama por feature/bug**, nacida de `main` actualizado (Fase 0 de las skills SDD). Si la tarea depende de código aún no mergeado, se basa en esa rama y se anota `Rama base:` en la spec. Por qué: cambios aislados, revisables y revertibles por separado.
 
 ## Pendientes
-- [ ] Decidir si se commitea `.claude/` (skills + settings con hooks de graphify) al control de versiones.
+- [x] Commitear `.claude/` al control de versiones — hecho: está trackeado (skills + settings con hooks de graphify).
 - [ ] (Opcional) Montar el loop de evals del skill-creator si se quiere validar las skills SDD con métricas.
+- [ ] (Higiene) Podar ramas ya fusionadas: `feature/nmap-usa-nsga`, `fix/nmap-enforce-scope`, `fix/validator-scope-templates`, `perf/offensive-ai-speed` (local y remoto).
 
 ## Trampas conocidas
 - Dos estilos de import conviven: API usa `src.inter.xxx`; engine usa `inter.xxx` vía `sys.path.append`. `tests/conftest.py` carga ambas raíces.
