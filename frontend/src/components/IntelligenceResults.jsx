@@ -12,6 +12,18 @@ const VALIDATION_STYLES = {
   not_tested:    { c: 'text-zinc-500 border-zinc-700/30 bg-zinc-700/10',          label: 'No probado' },
 };
 
+// Color del badge de severidad (SPEC-0007).
+const SEVERITY_STYLES = {
+  critical: 'text-red-400 border-red-400/30 bg-red-400/10',
+  high:     'text-orange-400 border-orange-400/30 bg-orange-400/10',
+  medium:   'text-amber-400 border-amber-400/30 bg-amber-400/10',
+  low:      'text-sky-400 border-sky-400/30 bg-sky-400/10',
+  info:     'text-zinc-400 border-zinc-600/30 bg-zinc-600/10',
+  unknown:  'text-zinc-500 border-zinc-700/30 bg-zinc-700/10',
+};
+const SEVERITY_RANK = { critical: 5, high: 4, medium: 3, low: 2, info: 1, unknown: 0 };
+const STATUS_RANK = { confirmed: 3, likely: 2, not_confirmed: 1, not_tested: 0 };
+
 const TACTICAL_MESSAGES = [
   "Inicializando población aleatoria de configuraciones...",
   "Calculando frentes de Pareto no dominados...",
@@ -26,8 +38,9 @@ const TACTICAL_MESSAGES = [
 function IntelligenceResults({ result, loading, error, target }) {
   const [tacticalMessage, setTacticalMessage] = useState(TACTICAL_MESSAGES[0]);
   const [activeTab, setActiveTab] = useState('telemetry');
-  // Validación no destructiva (opt-in): mapa puerto -> resultado.
-  const [validation, setValidation] = useState({});
+  // Validación no destructiva (opt-in). Lista plana de veredictos (null = no
+  // ejecutada); de ella se derivan el badge por puerto y el veredicto ordenado.
+  const [validationList, setValidationList] = useState(null);
   const [validating, setValidating] = useState(false);
   const [validationError, setValidationError] = useState('');
 
@@ -40,9 +53,7 @@ function IntelligenceResults({ result, loading, error, target }) {
         port: f.port, service: f.service, banner: f.banner || '',
       }));
       const data = await ValidationService.validate(target, findings);
-      const map = {};
-      (data.results || []).forEach((r) => { map[r.port] = r; });
-      setValidation(map);
+      setValidationList(data.results || []);
     } catch (err) {
       setValidationError(
         err.response?.data?.detail || 'No se pudo validar. ¿El objetivo está en el scope autorizado?'
@@ -52,8 +63,25 @@ function IntelligenceResults({ result, loading, error, target }) {
     }
   };
 
+  // Veredicto más fuerte por puerto (para el badge de la tabla de servicios).
+  const strongest = (a, b) => {
+    const sa = STATUS_RANK[a.status] || 0, sb = STATUS_RANK[b.status] || 0;
+    if (sa !== sb) return sa > sb ? a : b;
+    return (SEVERITY_RANK[a.severity] || 0) >= (SEVERITY_RANK[b.severity] || 0) ? a : b;
+  };
+  const byPort = {};
+  (validationList || []).forEach((r) => {
+    byPort[r.port] = byPort[r.port] ? strongest(byPort[r.port], r) : r;
+  });
+
+  // Veredicto completo, ordenado por severidad y luego certeza (lo crítico arriba).
+  const verdicts = [...(validationList || [])].sort((a, b) => {
+    const d = (SEVERITY_RANK[b.severity] || 0) - (SEVERITY_RANK[a.severity] || 0);
+    return d !== 0 ? d : (STATUS_RANK[b.status] || 0) - (STATUS_RANK[a.status] || 0);
+  });
+
   const validationBadge = (port) => {
-    const r = validation[port];
+    const r = byPort[port];
     if (!r) return <span className="text-zinc-600 text-[10px]">—</span>;
     const s = VALIDATION_STYLES[r.status] || VALIDATION_STYLES.not_tested;
     const title = r.evidence?.reproduce ? `Reproducir: ${r.evidence.reproduce}` : '';
@@ -239,6 +267,42 @@ function IntelligenceResults({ result, loading, error, target }) {
                     </table>
                   </div>
                 </section>
+
+                {verdicts.length > 0 && (
+                  <section className="mt-6">
+                    <h3 className="text-xs text-zinc-500 uppercase tracking-widest mb-4">
+                      Veredicto de exposición ({verdicts.length})
+                    </h3>
+                    <div className="space-y-2">
+                      {verdicts.map((v, i) => {
+                        const st = VALIDATION_STYLES[v.status] || VALIDATION_STYLES.not_tested;
+                        const sev = SEVERITY_STYLES[v.severity] || SEVERITY_STYLES.unknown;
+                        return (
+                          <div key={i} className="bg-[#0a0a0b] border border-zinc-800 rounded p-4">
+                            <div className="flex items-center gap-2 flex-wrap mb-1">
+                              <span className={`px-2 py-0.5 rounded text-[9px] uppercase font-bold border ${sev}`}>{v.severity}</span>
+                              <span className={`px-2 py-0.5 rounded text-[9px] uppercase font-bold border ${st.c}`}>{st.label}</span>
+                              <span className="text-white text-sm font-semibold">{v.vuln_class || v.name || 'hallazgo'}</span>
+                              {v.port != null && <span className="text-zinc-500 text-xs">· puerto {v.port}</span>}
+                            </div>
+                            {v.location && (
+                              <p className="text-cyan-400 font-mono text-xs break-all">{v.location}</p>
+                            )}
+                            {v.name && v.name !== v.vuln_class && (
+                              <p className="text-zinc-400 text-xs mt-1">{v.name}</p>
+                            )}
+                            {v.evidence?.reproduce && (
+                              <p className="text-zinc-500 font-mono text-[11px] mt-2">↳ {v.evidence.reproduce}</p>
+                            )}
+                            {v.evidence?.snippet && (
+                              <pre className="text-zinc-500 text-[11px] mt-1 whitespace-pre-wrap break-all max-h-24 overflow-auto">{v.evidence.snippet}</pre>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </section>
+                )}
               </div>
             )}
 

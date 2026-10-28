@@ -1,0 +1,53 @@
+# Rutas sensibles de alto valor para forced browsing NO destructivo (SPEC-0007).
+# Solo GET. Una ruta por línea; las líneas con # se ignoran.
+# Control de versiones de configuración / fuentes
+/.env
+/.git/config
+/.git/HEAD
+/.svn/entries
+/.hg/store/00manifest.i
+/config.json
+/config.php.bak
+/wp-config.php.bak
+/web.config
+/appsettings.json
+/application.properties
+# Credenciales / secretos
+/.aws/credentials
+/.ssh/id_rsa
+/id_rsa
+/.htpasswd
+/.htaccess
+/.npmrc
+/.dockercfg
+/credentials.json
+/secrets.json
+# Volcados / backups / bases de datos
+/backup.zip
+/backup.tar.gz
+/backup.sql
+/database.sql
+/dump.sql
+/db.sqlite3
+/.DS_Store
+# Estado / diagnóstico del servidor
+/server-status
+/server-info
+/phpinfo.php
+/info.php
+/actuator
+/actuator/health
+/actuator/env
+/actuator/heapdump
+# Paneles / herramientas de administración
+/adminer.php
+/phpmyadmin/
+# Metadatos del proyecto
+/package.json
+/composer.json
+/docker-compose.yml
+/.travis.yml
+# Logs
+/logs/
+/log.txt
+/error.log

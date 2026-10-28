@@ -123,6 +123,11 @@ class ValidationResult(BaseModel):
     service: str = "unknown"
     # confirmed | likely | not_confirmed | not_tested
     status: str = "not_tested"
-    # Evidencia reproducible (redactada): {reproduce, snippet, template}.
+    # Evidencia reproducible (redactada): {reproduce, snippet, template, matches}.
     evidence: dict = Field(default_factory=dict)
     source: str = ""
+    # SPEC-0007: qué, dónde y con qué gravedad (para reportar, no solo etiquetar).
+    name: str = ""
+    severity: str = "unknown"      # critical|high|medium|low|info|unknown
+    location: str = ""             # URL/ruta exacta del hallazgo
+    vuln_class: str = ""           # clase legible de la vulnerabilidad

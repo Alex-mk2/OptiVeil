@@ -4,9 +4,9 @@
 > código → `graphify query`. Esta bitácora → en qué vamos y por qué.
 
 ## Estado actual
-- Rama: `main`, al día (SPEC-0006 mergeada a `origin/main`).
-- Tarea en curso: ninguna.
-- Última cerrada: [SPEC-0006](../docs/specs/SPEC-0006-pareto-interactivo.md) (Frente de Pareto interactivo: elegir la config desde el frente, no solo `stealth` 1-10) — **Implementada y mergeada a main** (2026-10-28), `pytest -ra` 142 passed, `npm run build` OK. Nota: el clic en la UI (criterio 6) queda a verificación manual al levantar la app.
+- Rama: `feat/veredicto-explotabilidad` (SPEC-0007), nacida de `main` al día.
+- Tarea en curso: **SPEC-0007 — buscar rutas que exponen info sensible**. Implementada; `pytest -ra` 162 passed, `npm run build` OK. Pendiente: verificación manual del render en la UI y merge a `main` (PR).
+- Anterior: [SPEC-0006](../docs/specs/SPEC-0006-pareto-interactivo.md) (Frente de Pareto interactivo) — Implementada y mergeada a main.
 - Anterior: [SPEC-0005](../docs/specs/SPEC-0005-nmap-usa-nsga.md) (`/api/nmap` consume la config de NSGA-II en vez de presets `-T`) — Implementada.
 - Anterior: [SPEC-0003](../docs/specs/SPEC-0003-validador-nuclei-timeout.md) (nuclei siempre daba `not_tested`) — Implementada. Fix: `-disable-update-check`/`-no-update-templates` + `-tags <servicio>`.
 - Anterior: [SPEC-0002](../docs/specs/SPEC-0002-validacion-no-destructiva.md) (validación NO destructiva) — Implementada. Endpoint `/api/validate` con scope estricto; backend nuclei pluggable.
@@ -24,13 +24,14 @@
 
 ## Pendientes
 - [x] Commitear `.claude/` al control de versiones — hecho: está trackeado (skills + settings con hooks de graphify).
-- [ ] **Veredicto de vulnerabilidad más claro** (duda de Alex, 2026-10-28). La
-  validación (SPEC-0002/0003) ya da `confirmed/likely/not_confirmed/not_tested` +
-  evidencia, pero se siente pobre porque: (1) se **descarta `info.severity`** de
-  nuclei en `validator.py._map`; (2) no hay **síntesis ni prioridad por objetivo**
-  (lista de estados, no "este objetivo: 1 crítico confirmado"); (3) `likely` es
-  inferencia por versión, no prueba. Próxima spec tras SPEC-0006; posible combo
-  con EPSS/KEV. Techo honesto: validación no destructiva = detección, no explotación.
+- [x] **Veredicto de vulnerabilidad más claro** → abordado en **SPEC-0007**: severidad
+  expuesta, `confirmed` honesto (solo con contenido observado), clase y ubicación, y
+  búsqueda de rutas que exponen info sensible (RUT/correo/secretos), con evidencia
+  redactada. Pendiente opcional futuro: EPSS/KEV y crawling de rutas propias (SPEC-0008).
+- [ ] **(Futuro) SPEC-0008** — crawling de las rutas propias de la app para alcanzar
+  endpoints que no están en la lista curada (p. ej. un endpoint propio que filtra PII).
+  Sigue siendo recon no destructivo (encaja en este proyecto); explotar/armar ataques
+  no (va a un proyecto ofensivo aparte).
 - [ ] (Opcional) Montar el loop de evals del skill-creator si se quiere validar las skills SDD con métricas.
 - [x] (Higiene) Podadas las ramas ya fusionadas (local y remoto). Solo queda `main`.
 

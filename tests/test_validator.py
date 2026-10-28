@@ -183,6 +183,8 @@ def test_validate_en_scope_ok(client, monkeypatch):
     fake = [{"port": 80, "service": "http", "status": CONFIRMED,
              "evidence": {"reproduce": "curl ...", "snippet": "", "template": "t"}, "source": "nuclei"}]
     monkeypatch.setattr(validation_router, "validate_findings", lambda t, f: fake)
+    # SPEC-0007: el endpoint fusiona el backend de rutas; se mockea a vacío (sin red).
+    monkeypatch.setattr(validation_router, "find_exposed_routes", lambda t, f: [])
     r = client.post("/api/validate", json=_body("10.0.0.1"))
     assert r.status_code == 200
     assert r.json() == {"results": fake}

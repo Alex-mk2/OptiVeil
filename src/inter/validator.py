@@ -25,6 +25,8 @@ import shutil
 import subprocess
 from abc import ABC, abstractmethod
 
+from src.inter.sensitive_data import find_sensitive, mask_pii_in_text
+
 logger = logging.getLogger("optiveil.validator")
 
 # Estados del veredicto, de mayor a menor certeza.
@@ -41,6 +43,32 @@ _SNIPPET_MAX = 300  # longitud máxima del fragmento de evidencia
 # Caracteres válidos para un tag de nuclei. El `service` viene del fingerprint
 # (input no confiable): se sanea antes de construir el comando (SPEC-0003).
 _TAG_RE = re.compile(r"[^a-z0-9-]")
+
+# Severidades de nuclei normalizadas, de mayor a menor. Antes se descartaban;
+# ahora el veredicto las expone y el frontend ordena por ellas.
+_SEVERITIES = ("critical", "high", "medium", "low", "info")
+
+
+def normalize_severity(value) -> str:
+    """Normaliza la severidad de nuclei; una desconocida/ausente → 'unknown'."""
+    s = str(value or "").strip().lower()
+    return s if s in _SEVERITIES else "unknown"
+
+
+def _class_from_tags(tags: list[str]) -> str:
+    """Traduce los tags de una plantilla a una clase legible de vulnerabilidad."""
+    mapping = [
+        (("exposure", "exposures", "disclosure"), "exposición"),
+        (("default-login",), "credenciales por defecto"),
+        (("misconfig", "misconfiguration"), "configuración insegura"),
+        (("panel",), "panel expuesto"),
+        (("cve",), "cve"),
+        (("version", "tech"), "detección por versión"),
+    ]
+    for keys, label in mapping:
+        if any(t in keys for t in tags):
+            return label
+    return tags[0] if tags else "detección"
 
 
 class ValidatorUnavailable(RuntimeError):
@@ -60,18 +88,26 @@ def redact_snippet(text, max_len: int = _SNIPPET_MAX) -> str:
         r'(?i)(password|passwd|token|secret|api[_-]?key|authorization)(\s*[:=]\s*)\S+',
         r'\1\2[REDACTADO]', s,
     )
+    s = mask_pii_in_text(s)  # RUT/correo: no filtrar datos personales en la evidencia
     if len(s) > max_len:
         s = s[:max_len] + "...[truncado]"
     return s
 
 
-def _result(finding: dict, status: str, evidence: dict | None = None, source: str = "") -> dict:
+def _result(finding: dict, status: str, evidence: dict | None = None, source: str = "",
+            *, name: str = "", severity: str = "unknown", location: str = "",
+            vuln_class: str = "") -> dict:
     return {
         "port": finding.get("port"),
         "service": finding.get("service", "unknown"),
         "status": status,
         "evidence": evidence or {},
         "source": source,
+        # SPEC-0007: qué (name/vuln_class), dónde (location) y gravedad (severity).
+        "name": name,
+        "severity": severity,
+        "location": location,
+        "vuln_class": vuln_class,
     }
 
 
@@ -182,17 +218,40 @@ class NucleiValidator(Validator):
                 continue
 
             info = hit.get("info") or {}
-            tags = info.get("tags") or []
-            # Una detección por versión es "probable"; un match de comportamiento
-            # directo es "confirmado".
+            tags = [str(t).lower() for t in (info.get("tags") or [])]
+            raw_extracted = hit.get("extracted-results") or ""
+            extracted = raw_extracted if isinstance(raw_extracted, str) else " ".join(map(str, raw_extracted))
+            matched_at = str(hit.get("matched-at") or hit.get("host") or "")
+
+            # ¿Hay PII/secretos en lo que nuclei extrajo de la respuesta?
+            sensitive = find_sensitive(extracted)
+
+            # Reclasificación honesta: `confirmed` solo con contenido observado
+            # (datos extraídos de la respuesta o PII). Versión/tech y CVE sin
+            # contenido quedan en `likely` (inferencia, no observación).
             version_only = any(t in ("version", "tech") for t in tags)
-            status = LIKELY if version_only else CONFIRMED
+            observo_contenido = bool(extracted) or bool(sensitive)
+            if sensitive:
+                status, vuln_class = CONFIRMED, "exposición de datos sensibles"
+            elif version_only or not observo_contenido:
+                status, vuln_class = LIKELY, _class_from_tags(tags)
+            else:
+                status, vuln_class = CONFIRMED, _class_from_tags(tags)
+
             evidence = {
-                "reproduce": str(hit.get("curl-command") or hit.get("matched-at") or ""),
-                "snippet": redact_snippet(hit.get("extracted-results") or info.get("name") or ""),
+                "reproduce": str(hit.get("curl-command") or matched_at or ""),
+                "snippet": redact_snippet(extracted or info.get("name") or ""),
                 "template": hit.get("template-id", ""),
             }
-            results.append(_result(f, status, evidence, "nuclei"))
+            if sensitive:
+                evidence["matches"] = sensitive
+            results.append(_result(
+                f, status, evidence, "nuclei",
+                name=str(info.get("name") or hit.get("template-id") or ""),
+                severity=normalize_severity(info.get("severity")),
+                location=matched_at,
+                vuln_class=vuln_class,
+            ))
         return results
 
 
