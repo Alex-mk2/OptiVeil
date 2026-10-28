@@ -14,6 +14,24 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 
+# nuclei (ProjectDiscovery): backend de la validación no destructiva (SPEC-0002).
+# Se descarga el binario de la última release (linux_amd64). ca-certificates se
+# mantiene porque nuclei lo necesita en runtime (TLS + descarga de plantillas);
+# curl/unzip se purgan tras instalar para no inflar la imagen. Si nuclei faltara,
+# el validador degrada a "not_tested", así que la imagen sigue siendo funcional.
+RUN set -eux; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends curl unzip ca-certificates; \
+    url="$(curl -fsSL https://api.github.com/repos/projectdiscovery/nuclei/releases/latest | grep -o '"browser_download_url": *"[^"]*linux_amd64\.zip"' | head -n1 | sed 's/.*"\(http[^"]*\)".*/\1/')"; \
+    curl -fsSL "$url" -o /tmp/nuclei.zip; \
+    unzip -o /tmp/nuclei.zip nuclei -d /usr/local/bin; \
+    chmod +x /usr/local/bin/nuclei; \
+    rm -f /tmp/nuclei.zip; \
+    apt-get purge -y --auto-remove curl unzip; \
+    rm -rf /var/lib/apt/lists/*; \
+    nuclei -version
+
+
 # El build context es la raíz del repo (ver docker-compose.yml) para poder
 # incluir alembic.ini y migrations/, que viven fuera de src/.
 WORKDIR /app

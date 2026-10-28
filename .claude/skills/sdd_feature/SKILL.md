@@ -34,6 +34,20 @@ y [.claude/context.md](../../context.md). Resumen de lo que más condiciona una 
 - **Zero-trust y tipado estricto.** Validación de todo input; Pydantic en
   endpoints, interfaces TS en React.
 
+## Fase 0 — Rama
+
+Una rama por feature. Nunca implementes sobre `main` ni reutilices la rama de
+otra tarea. Antes de la spec, nace una rama desde la base **actualizada**:
+
+```bash
+git switch main && git pull --ff-only
+git switch -c feat/<slug-corto>       # mismo slug que el SPEC-NNNN
+```
+
+Si la feature depende de código que **aún no está en `main`** (otra rama sin
+mergear), basa la rama en esa rama en vez de `main`, y déjalo anotado en la spec
+(`Rama base:`). Así cada feature es aislada, revisable y revertible por separado.
+
 ## Fase 1 — Spec
 
 El entregable de esta fase es un **archivo de spec numerado** en `docs/specs/`
