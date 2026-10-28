@@ -17,3 +17,4 @@ pierdan con el tiempo. Lo gestionan las skills `sdd_feature` y `sdd_bug_fix`
 | [SPEC-0003](SPEC-0003-validador-nuclei-timeout.md) | El validador nuclei siempre degrada a not_tested | bugfix | Implementada | 2026-10-25 |
 | [SPEC-0004](SPEC-0004-nmap-enforce-scope.md) | `/api/nmap` no pasa por enforce_scope ni audita | bugfix | Implementada | 2026-10-25 |
 | [SPEC-0005](SPEC-0005-nmap-usa-nsga.md) | `/api/nmap` consume la config de NSGA-II (no presets -T) | feature | Implementada | 2026-10-25 |
+| [SPEC-0006](SPEC-0006-pareto-interactivo.md) | Frente de Pareto interactivo (elegir la config, no solo stealth 1-10) | feature | Implementada | 2026-10-28 |

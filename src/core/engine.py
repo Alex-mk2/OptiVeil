@@ -4,7 +4,12 @@ import os
 import sys
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
-from modules.stealth.nsga_II import run_nsga_ii, select_best_configuration
+from modules.stealth.nsga_II import (
+    run_nsga_ii,
+    select_best_configuration,
+    pareto_front_with_configs,
+    metrics_for_config,
+)
 from modules.stealth.scanner import StealthScanner
 from utils.generate_report import save_audit_report, render_roadmap_markdown
 from inter.fingerprint import ServiceIdentifier
@@ -14,10 +19,14 @@ from utils.pareto_plot import plot_pareto_front
 from inter.IA_offensive import generate_attack_path
 
 class OptiVeilEngine:
-    def __init__(self, target: str, stealth: int, ports_count: int):
+    def __init__(self, target: str, stealth: int, ports_count: int, config: dict | None = None):
         self.target = target
         self.stealth = stealth
         self.ports_count = ports_count
+        # Config explícita elegida en el Frente de Pareto (SPEC-0006). Si es None,
+        # se deriva de `stealth` como siempre. Keyword opcional: la CLI sigue
+        # instanciando el engine posicionalmente con (target, stealth, ports).
+        self.config = config
 
     def execute(self, status_callback=None):
         def notify(msg):
@@ -26,12 +35,22 @@ class OptiVeilEngine:
 
         notify(f"Optimizando parámetros para sigilo {self.stealth}...")
         X, F = run_nsga_ii(target_ports=self.ports_count)
-        
-        optimization_data = select_best_configuration(X, F, stealth_level=self.stealth)
-        
-        best_config = optimization_data["config"]
-        pareto_front = optimization_data["pareto_front"]
-        
+
+        if self.config is not None:
+            # Config explícita del Frente de Pareto: se usa tal cual, con las
+            # métricas recomputadas por la fórmula del problema (no se confía en
+            # las que pueda mandar el cliente). Zero-trust.
+            best_config = {
+                **self.config,
+                "metrics": metrics_for_config(self.config, self.ports_count),
+            }
+        else:
+            best_config = select_best_configuration(X, F, stealth_level=self.stealth)["config"]
+
+        # Frente completo (con la config de cada punto) para que el frontend lo
+        # dibuje y permita clicar una solución.
+        pareto_front = pareto_front_with_configs(X, F)
+
         plot_pareto_front(F, target=self.target)
 
         notify(f"Escaneando {self.target} (Bajo el radar)...")

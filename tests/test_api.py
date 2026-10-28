@@ -127,3 +127,51 @@ def test_topology_con_hallazgos(client):
     ids = {n["id"] for n in data["nodes"]}
     assert "attacker" in ids and "target" in ids
     assert "port-22" in ids and "port-80" in ids
+
+
+# --- SPEC-0006: config explícita del Frente de Pareto en /api/scan ---
+
+def test_scan_rechaza_config_fuera_de_rango(client):
+    # threads=99 está fuera del espacio del problema (1-10): 422 al parsear, sin escanear.
+    r = client.post("/api/scan", json={
+        "target": "10.0.0.5", "stealth": 5, "ports": 50,
+        "config": {"wait_time_ms": 1000, "packet_size": 256, "threads": 99},
+    })
+    assert r.status_code == 422
+
+
+def test_scan_pasa_config_explicita_al_motor(client, monkeypatch):
+    # Un motor espía captura el kwarg `config` con el que se instancia.
+    capturado = {}
+
+    class _SpyEngine:
+        def __init__(self, *args, **kwargs):
+            capturado["config"] = kwargs.get("config")
+
+        def execute(self, status_callback=None):
+            return {
+                "status": "success",
+                "best_config": FAKE_RESULT["best_config"],
+                "findings": [],
+                "pareto_front": [],
+                "attack_roadmap": {"steps": []},
+                "scan_stats": {},
+            }
+
+    monkeypatch.setattr(scanner, "OptiVeilEngine", _SpyEngine)
+    cfg = {"wait_time_ms": 1234.0, "packet_size": 256, "threads": 4}
+    r = client.post("/api/scan", json={
+        "target": "10.0.0.5", "stealth": 5, "ports": 50, "config": cfg,
+    })
+    assert r.status_code == 202
+    # La BackgroundTask ya corrió (TestClient la ejecuta tras la respuesta).
+    assert capturado["config"] == cfg
+
+
+def test_scan_sin_config_no_regresiona(client):
+    # Sin `config`, el flujo es el de siempre (el motor falso decide): job completa.
+    r = client.post("/api/scan", json={"target": "10.0.0.7", "stealth": 5, "ports": 50})
+    assert r.status_code == 202
+    job_id = r.json()["job_id"]
+    done = client.get(f"/api/scan/{job_id}").json()
+    assert done["status"] == "done"

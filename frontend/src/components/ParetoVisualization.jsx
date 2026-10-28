@@ -1,6 +1,6 @@
 import { ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
-function ParetoVisualization({ data, selectedPoint }) {
+function ParetoVisualization({ data, selectedPoint, onSelect }) {
   return (
     <div className="bg-[#121214] p-6 rounded-xl border border-zinc-800 shadow-inner h-[350px]">
       <h3 className="text-cyan-400 text-xs font-bold uppercase tracking-widest mb-6 flex items-center gap-2">
@@ -46,14 +46,19 @@ function ParetoVisualization({ data, selectedPoint }) {
             labelStyle={{ display: 'none' }} // Escondemos el label interno si no se usa
           />
 
-          <Scatter name="Configuraciones" data={data}>
+          <Scatter
+            name="Configuraciones"
+            data={data}
+            onClick={(entry) => onSelect && onSelect(entry)}
+            style={{ cursor: onSelect ? 'pointer' : 'default' }}
+          >
             {data.map((entry, index) => {
               // Comprobamos si es el punto seleccionado para destacarlo
               const isSelected = entry.noise === selectedPoint?.noise && entry.time === selectedPoint?.time;
               return (
-                <Cell 
-                  key={`cell-${index}`} 
-                  fill={isSelected ? '#22d3ee' : '#155e75'} 
+                <Cell
+                  key={`cell-${index}`}
+                  fill={isSelected ? '#22d3ee' : '#155e75'}
                   fillOpacity={isSelected ? 1 : 0.6}
                   r={isSelected ? 7 : 4}
                   stroke={isSelected ? '#fff' : 'none'}
